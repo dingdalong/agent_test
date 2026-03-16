@@ -12,3 +12,4 @@ client = OpenAI(
 
 # 模型名称（供其他模块使用）
 MODEL_NAME = os.getenv("OPENAI_MODEL")
+USER_ID = os.getenv("USER_ID")

@@ -1,20 +1,26 @@
 import os
 import logging
+import asyncio
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 load_dotenv()
 
-# 初始化 OpenAI 客户端
-base_url = os.getenv("OPENAI_BASE_URL")
-client = OpenAI(
-    base_url=base_url,
-    api_key=os.getenv("OPENAI_API_KEY")
+# 纯异步客户端（替换现有的同步客户端）
+async_client = AsyncOpenAI(
+    base_url=os.getenv("OPENAI_BASE_URL"),
+    api_key=os.getenv("OPENAI_API_KEY"),
+    timeout=30.0,
+    max_retries=2,
 )
 
 # 模型名称（供其他模块使用）
 MODEL_NAME = os.getenv("OPENAI_MODEL")
 USER_ID = os.getenv("USER_ID")
+
+# 并发控制配置
+DEFAULT_CONCURRENCY = 5
+request_semaphore = asyncio.Semaphore(DEFAULT_CONCURRENCY)
 
 # 性能监控日志配置
 logging.basicConfig(

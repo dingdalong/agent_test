@@ -209,5 +209,5 @@ __marimo__/
 chroma_data/
 
 # Worktrees for isolated development
-.worktrees/
+.worktrees/*
 .claude/

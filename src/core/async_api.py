@@ -43,10 +43,84 @@ async def call_model(
             except APIError as e:
                 raise
 
-async def parse_stream_response(stream, stream_output=True):
-    """异步流式响应解析（占位符）"""
-    raise NotImplementedError("待实现")
+async def parse_stream_response(
+    stream,
+    stream_output: Union[bool, Callable] = True
+) -> Tuple[str, Dict[int, Dict[str, str]], Optional[str]]:
+    """
+    异步迭代流式响应，支持异步回调
+    """
+    tool_calls = {}
+    content_parts = []
+    finish_reason = None
 
-async def parse_nonstream_response(response, stream_output=True):
-    """异步非流式响应解析（占位符）"""
-    raise NotImplementedError("待实现")
+    async for chunk in stream:
+        delta = chunk.choices[0].delta
+
+        # 处理文本内容
+        if delta.content:
+            if not (delta.tool_calls and delta.content.isspace()):
+                content_parts.append(delta.content)
+                if stream_output:
+                    if callable(stream_output):
+                        if asyncio.iscoroutinefunction(stream_output):
+                            await stream_output(delta.content)
+                        else:
+                            await asyncio.to_thread(stream_output, delta.content)
+                    else:
+                        print(delta.content, end="", flush=True)
+
+        # 处理工具调用
+        if delta.tool_calls:
+            for tool_chunk in delta.tool_calls:
+                idx = tool_chunk.index
+                if idx not in tool_calls:
+                    tool_calls[idx] = {"id": "", "name": "", "arguments": ""}
+                if tool_chunk.id:
+                    tool_calls[idx]["id"] = tool_chunk.id
+                if tool_chunk.function.name:
+                    tool_calls[idx]["name"] += tool_chunk.function.name
+                if tool_chunk.function.arguments:
+                    tool_calls[idx]["arguments"] += tool_chunk.function.arguments
+
+        if chunk.choices[0].finish_reason:
+            finish_reason = chunk.choices[0].finish_reason
+
+    if stream_output and not callable(stream_output):
+        print()
+
+    content = "".join(content_parts)
+    return content, tool_calls, finish_reason
+
+async def parse_nonstream_response(
+    response,
+    stream_output: Union[bool, Callable] = True
+) -> Tuple[str, Dict[int, Dict[str, str]], Optional[str]]:
+    """
+    异步解析非流式响应
+    """
+    message = response.choices[0].message
+    content = message.content or ""
+    finish_reason = response.choices[0].finish_reason
+
+    # 转换tool_calls为字典格式
+    tool_calls_dict = {}
+    if message.tool_calls:
+        for idx, tool_call in enumerate(message.tool_calls):
+            tool_calls_dict[idx] = {
+                "id": tool_call.id,
+                "name": tool_call.function.name,
+                "arguments": tool_call.function.arguments
+            }
+
+    # 输出处理
+    if stream_output:
+        if callable(stream_output):
+            if asyncio.iscoroutinefunction(stream_output):
+                await stream_output(content)
+            else:
+                await asyncio.to_thread(stream_output, content)
+        else:
+            print(content)
+
+    return content, tool_calls_dict, finish_reason

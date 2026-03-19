@@ -164,6 +164,8 @@ class FactExtractor:
         self.type_validator = TypeValidator()
         self.text_utils = TextUtils()
         self.fallback_parser = FallbackParser()
+        self.target_types = self._determine_target_types(None)
+        self.prompt = self._build_prompt(self.target_types)
 
     @time_function()
     def extract(self,
@@ -175,11 +177,9 @@ class FactExtractor:
         """
         执行提取流程，返回 Fact 对象列表
         """
-        target_types = self._determine_target_types(include_types)
-        prompt = self._build_prompt(user_input, assistant_response, target_types)
 
         # 调用模型
-        model_output = self._call_model(prompt)
+        model_output = self._call_model(user_input, assistant_response)
         if not model_output:
             return []
 
@@ -196,7 +196,7 @@ class FactExtractor:
                                      assistant_response,
                                      source_id,
                                      enable_sensitive_filter,
-                                     target_types)
+                                     self.target_types)
             if fact:
                 facts.append(fact)
         return facts
@@ -206,10 +206,9 @@ class FactExtractor:
             return self.config.FLAT_ALLOWED_TYPES
         return include_types & self.config.FLAT_ALLOWED_TYPES
 
-    def _build_prompt(self, user_input: str, assistant_response: str, target_types: Set[str]) -> str:
+    def _build_prompt(self, target_types: Set[str]) -> str:
         type_desc = "\n".join(f"  - {t}" for t in sorted(target_types))
-        conversation = f"用户说：{user_input}\n助手说：{assistant_response}"
-        prompt = f"""你是一个面向长期记忆的信息提取器，任务是从以下对话中提取值得长期保存的知识。请根据内容将知识分类，并严格按照 JSON 格式输出。
+        prompt = f"""你是一个面向长期记忆的信息提取器，任务是从以下对话中提取值得长期保存的知识。请根据内容将知识分类，并严格按照 JSON 格式输出。请仅输出 JSON，不要包含任何其他说明或 Markdown 代码块标记。
 
 可提取的知识类型包括：
 {type_desc}
@@ -250,16 +249,19 @@ class FactExtractor:
   ]
 }}
 
-对话：
-{conversation}
-
-JSON 输出："""
+"""
         return prompt
 
     @time_function()
-    def _call_model(self, prompt: str) -> Optional[str]:
+    def _call_model(self,
+                    user_input: str,
+                    assistant_response: str) -> Optional[str]:
         try:
-            response, tool_calls, finish_reason = call_model_with_retry([{"role": "user", "content": prompt}], temperature=0.0)
+            prompt = [
+                {"role": "system", "content": self.prompt},  # 固定部分
+                {"role": "user", "content": f"用户说：{user_input}\n助手说：{assistant_response}"}  # 变化部分
+            ]
+            response, tool_calls, finish_reason = call_model_with_retry(prompt, temperature=0.0)
             if not response:
                 return None
             return response

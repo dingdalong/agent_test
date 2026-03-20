@@ -34,7 +34,7 @@ request_semaphore = asyncio.Semaphore(DEFAULT_CONCURRENCY)
 # 避免重复配置日志
 if not logging.getLogger().hasHandlers():
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
             logging.FileHandler('performance.log'),

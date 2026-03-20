@@ -3,10 +3,11 @@ import logging
 import asyncio
 
 from src.tools import tools, tool_executor
-from src.core.async_api import call_model, execute_tool_calls
+from src.core.async_api import call_model
 from src.memory.memory import ConversationBuffer, VectorMemory
 from config import USER_ID
 from src.core.performance import time_function, async_time_function
+from tools.tool_call import execute_tool_calls
 
 
 def _build_collection_name(prefix: str, user_id: str | None) -> str:
@@ -69,7 +70,16 @@ async def run_agent(user_input: str, memory: ConversationBuffer, system_prompt: 
     memory.add_user_message(user_input)
 
     # 2. 多轮工具调用循环
+    max_tool_calls = 5
+    tool_call_count = 0
     while True:
+        tool_call_count += 1
+        if tool_call_count > max_tool_calls:
+            # 防止无限循环，添加一条助手消息告知用户
+            memory.add_assistant_message({"role": "assistant", "content": "抱歉，工具调用次数过多，请稍后重试或简化问题。"})
+            break
+
+        enhanced_system = enhanced_system + "\n\n如果工具返回错误，请分析错误信息并尝试重新调用（调整参数），或向用户解释。"
         messages = [{"role": "system", "content": enhanced_system}] + memory.get_messages_for_api()
         content, tool_calls, _ = await call_model(messages, stream=True, tools=tools)
 

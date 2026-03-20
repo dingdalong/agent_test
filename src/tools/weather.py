@@ -6,7 +6,7 @@ class GetWeather(BaseModel):
     """获取指定城市的天气预报。"""
     city: str = Field(description="城市名称")
 
-@tool(name="get_weather", description="模拟天气查询")
+@tool(model=GetWeather, description="模拟天气查询")
 async def get_weather(city: str) -> str:
     await asyncio.sleep(0.1)  # 模拟异步操作
     weather_data = {

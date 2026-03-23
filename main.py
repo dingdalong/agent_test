@@ -121,10 +121,10 @@ async def run_agent(user_input: str, memory: ConversationBuffer, system_prompt: 
         for tool_msg in new_messages[1:]:
             memory.add_tool_message(tool_msg["tool_call_id"], tool_msg["content"])
 
-    user_facts.add_conversation(user_input)
+    await user_facts.add_conversation(user_input)
 
     if memory.should_compress():
-        memory.compress(conversation_summaries)
+        await memory.compress(conversation_summaries)
 
     passed, reason = output_guard.check(final_response)
     if not passed:

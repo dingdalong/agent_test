@@ -7,8 +7,8 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Set, Union
 
-from src.core.api import call_model_with_retry
-from src.core.performance import time_function
+from src.core.async_api import call_model
+from src.core.performance import async_time_function
 
 logger = logging.getLogger(__name__)
 
@@ -167,8 +167,8 @@ class FactExtractor:
         self.target_types = self._determine_target_types(None)
         self.prompt = self._build_prompt(self.target_types)
 
-    @time_function()
-    def extract(self,
+    @async_time_function()
+    async def extract(self,
                 user_input: str,
                 assistant_response: str = "",
                 source_id: Optional[str] = None,
@@ -179,7 +179,7 @@ class FactExtractor:
         """
 
         # 调用模型
-        model_output = self._call_model(user_input, assistant_response)
+        model_output = await self._call_model(user_input, assistant_response)
         if not model_output:
             return []
 
@@ -252,8 +252,8 @@ class FactExtractor:
 """
         return prompt
 
-    @time_function()
-    def _call_model(self,
+    @async_time_function()
+    async def _call_model(self,
                     user_input: str,
                     assistant_response: str) -> Optional[str]:
         try:
@@ -261,7 +261,7 @@ class FactExtractor:
                 {"role": "system", "content": self.prompt},  # 固定部分
                 {"role": "user", "content": f"用户说：{user_input}\n助手说：{assistant_response}"}  # 变化部分
             ]
-            response, tool_calls, finish_reason = call_model_with_retry(prompt, temperature=0.0)
+            response, tool_calls, finish_reason = await call_model(prompt, temperature=0.0)
             if not response:
                 return None
             return response

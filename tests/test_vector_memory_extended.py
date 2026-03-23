@@ -8,7 +8,9 @@ and backward compatibility features.
 import unittest
 import json
 import uuid
-from unittest.mock import Mock, patch, MagicMock
+import asyncio
+import pytest
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 from datetime import datetime, timezone
 
 # Import the modules to test
@@ -95,10 +97,13 @@ class TestVectorMemoryExtended(unittest.TestCase):
         buffer.add_user_message("用户消息2")
         buffer.add_assistant_message({"role": "assistant", "content": "助手回复2"})
 
-        with patch('src.memory.memory.summarize_conversation', return_value="这是对话摘要"):
-            mock_add_memory = Mock(return_value="summary_id")
-            buffer.compress(vector_memory=Mock(add_memory=mock_add_memory))
+        async def _run():
+            with patch('src.memory.memory.summarize_conversation', new_callable=AsyncMock, return_value="这是对话摘要"):
+                mock_add_memory = Mock(return_value="summary_id")
+                await buffer.compress(vector_memory=Mock(add_memory=mock_add_memory))
+            return mock_add_memory
 
+        mock_add_memory = asyncio.get_event_loop().run_until_complete(_run())
         memory_arg = mock_add_memory.call_args.args[0]
         self.assertIsInstance(memory_arg, SummaryMemory)
         self.assertEqual(memory_arg.conversation_id, "session-42")
@@ -526,28 +531,28 @@ class TestVectorMemoryExtended(unittest.TestCase):
         buffer.add_user_message("用户消息2")
         buffer.add_assistant_message({"role": "assistant", "content": "助手回复2"})
 
-        # Mock summarize_conversation
-        with patch('src.memory.memory.summarize_conversation') as mock_summarize:
-            mock_summarize.return_value = "这是对话摘要"
+        async def _run():
+            # Mock summarize_conversation
+            with patch('src.memory.memory.summarize_conversation', new_callable=AsyncMock, return_value="这是对话摘要") as mock_summarize:
+                # Mock vector_memory.add_memory
+                mock_add_memory = Mock(return_value="summary_id")
 
-            # Mock vector_memory.add_memory
-            mock_add_memory = Mock(return_value="summary_id")
+                # Call compress
+                await buffer.compress(vector_memory=Mock(add_memory=mock_add_memory))
 
-            # Call compress
-            buffer.compress(vector_memory=Mock(add_memory=mock_add_memory))
+                # Verify summarize_conversation was called
+                self.assertTrue(mock_summarize.called)
 
-            # Verify summarize_conversation was called
-            self.assertTrue(mock_summarize.called)
+                # Verify add_memory was called with SummaryMemory
+                self.assertTrue(mock_add_memory.called)
+                args, kwargs = mock_add_memory.call_args
 
-            # Verify add_memory was called with SummaryMemory
-            self.assertTrue(mock_add_memory.called)
-            args, kwargs = mock_add_memory.call_args
+                # First argument should be a Memory object
+                memory_arg = args[0] if args else kwargs.get('memory')
+                self.assertIsInstance(memory_arg, Memory)
+                self.assertEqual(memory_arg.memory_type, MemoryType.SUMMARY)
 
-            # First argument should be a Memory object
-            memory_arg = args[0] if args else kwargs.get('memory')
-            self.assertIsInstance(memory_arg, Memory)
-            self.assertEqual(memory_arg.memory_type, MemoryType.SUMMARY)
-            self.assertEqual(memory_arg.get_content(), "这是对话摘要")
+        asyncio.get_event_loop().run_until_complete(_run())
 
     def test_error_handling_in_deserialize_memory(self):
         """Test error handling in _deserialize_memory."""

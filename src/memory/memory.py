@@ -6,11 +6,11 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-from src.core.api import call_model_with_retry  # 假设你的 call_model_with_retry 支持非流式调用
-from src.core.performance import time_function
+from src.core.async_api import call_model
+from src.core.performance import async_time_function, time_function
 
-@time_function()
-def summarize_conversation(messages: list) -> str:
+@async_time_function()
+async def summarize_conversation(messages: list) -> str:
     """
     调用模型生成对话摘要。
     messages: 需要摘要的对话消息列表（通常是不包含 system 的多轮对话）。
@@ -32,7 +32,7 @@ def summarize_conversation(messages: list) -> str:
         # tool 消息也可考虑，但摘要中可能不需要细节，简化处理
 
     # 调用模型（使用非流式）
-    response, _, _ = call_model_with_retry(
+    response, _, _ = await call_model(
         messages=[{"role": "user", "content": prompt}],
         stream=False,
         tools=None  # 摘要不需要工具
@@ -82,8 +82,8 @@ class ConversationBuffer:
     def should_compress(self) -> bool:
         return self._count_messages_tokens(self.messages) > self.max_tokens
 
-    @time_function()
-    def compress(self, vector_memory: Optional["VectorMemory"] = None):
+    @async_time_function()
+    async def compress(self, vector_memory: Optional["VectorMemory"] = None):
         """压缩最早的对话，用摘要替换"""
         if len(self.messages) < 4:  # 至少需要几轮对话才有压缩意义
             return
@@ -100,7 +100,7 @@ class ConversationBuffer:
         remaining_msgs = self.messages[compress_count:]
 
         # 生成摘要
-        summary = summarize_conversation(old_msgs)
+        summary = await summarize_conversation(old_msgs)
 
         if vector_memory:
             # 将摘要存入长期记忆，创建 SummaryMemory 对象
@@ -259,7 +259,7 @@ class VectorMemory:
             embedding_function=self.embedding_fn
         )
 
-    def add_conversation(self,
+    async def add_conversation(self,
                 user_input: str,
                 assistant_response: str = "",
                 source_id: Optional[str] = None,
@@ -267,7 +267,7 @@ class VectorMemory:
                 enable_sensitive_filter: bool = True):
 
         extractor = FactExtractor()
-        facts1 = extractor.extract(user_input, assistant_response, source_id, include_types, enable_sensitive_filter)
+        facts1 = await extractor.extract(user_input, assistant_response, source_id, include_types, enable_sensitive_filter)
         for f in facts1:
             self._add_fact(f)  # attribute 应为 "user.name"，版本 1
 

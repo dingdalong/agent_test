@@ -74,12 +74,15 @@ def get_tools_schemas() -> list:
         })
     return schemas
 
+# 非工具模块，自动发现时跳过
+_SKIP_MODULES = {"__init__", "tool_call", "tool_executor"}
+
 # 自动发现所有工具模块
 package_dir = Path(__file__).parent
 for item in sorted(package_dir.glob("*.py")):
-    if item.name == "__init__.py":
-        continue
     module_name = item.stem
+    if module_name in _SKIP_MODULES:
+        continue
     module = importlib.import_module(f".{module_name}", package=__package__)
 
 tools = get_tools_schemas()

@@ -38,9 +38,9 @@ class ToolExecutor:
         try:
             result = await self._run_func(func, validated_args)
             result_str = str(result)
-            # 限制结果长度（例如 500 字符）
-            if len(result_str) > 500:
-                result_str = result_str[:500] + "...(结果已截断)"
+            # 限制结果长度
+            if len(result_str) > 2000:
+                result_str = result_str[:2000] + "...(结果已截断)"
             return result_str
         except Exception as e:
             # 精简错误信息：只保留异常类型和简短描述，不包含堆栈

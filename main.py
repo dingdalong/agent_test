@@ -6,8 +6,8 @@ from src.core.async_api import call_model, async_input
 from src.memory.memory import ConversationBuffer, VectorMemory
 from config import USER_ID
 from src.core.performance import async_time_function
-from tools.tool_call import execute_tool_calls
-from core.guardrails import InputGuardrail, OutputGuardrail
+from src.tools.tool_call import execute_tool_calls
+from src.core.guardrails import InputGuardrail, OutputGuardrail
 input_guard = InputGuardrail()
 output_guard = OutputGuardrail()
 

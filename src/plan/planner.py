@@ -35,6 +35,21 @@ def build_step_fields_description() -> str:
 
 _STEP_FIELDS_DESC = build_step_fields_description()
 
+CLARIFICATION_SYSTEM_PROMPT = """你是一个任务规划助手。在制定计划之前，你需要判断用户的请求是否提供了足够的信息来生成一个具体可执行的计划。
+
+请根据"用户原始请求"和"已收集的信息"，判断当前掌握的信息是否足够生成一个具体、可执行的计划。
+
+输出一个 JSON 对象：
+- 如果信息已经充足，返回：{{"status": "ready"}}
+- 如果还缺少关键信息，返回：{{"status": "need_info", "questions": "你要问用户的问题"}}
+
+判断标准：
+- 对照用户的原始请求，思考要完成这件事需要哪些关键信息（如时间、地点、人数、预算、偏好、约束条件等）
+- 检查"已收集的信息"中是否已经覆盖了这些关键要素
+- 如果已收集的信息已经涵盖了主要要素，即使不完美也应该返回 ready，不要过度追问
+- 只针对尚未回答的关键信息提问，绝对不要重复问已经回答过的问题
+- 提问要自然友好，像朋友对话一样，每次聚焦 2-3 个问题"""
+
 PLAN_GENERATION_SYSTEM_PROMPT = """你是一个任务规划助手。给定用户请求和可用工具，请判断该请求是否适合生成多步骤计划，并在适合时生成计划。
 
 重要规则：
@@ -155,6 +170,28 @@ async def classify_user_feedback(user_feedback: str, plan: Plan) -> str:
     except Exception as e:
         logger.warning(f"分类用户反馈失败: {e}, 默认为调整")
         return "adjust"
+
+
+async def check_clarification_needed(user_input: str, gathered_info: str = "") -> Optional[str]:
+    """判断用户请求是否信息充足，不足则返回要问的问题，充足返回 None。"""
+    user_message = f"用户原始请求：{user_input}\n\n已收集的信息：\n{gathered_info or '（暂无）'}"
+
+    try:
+        response, _, _ = await asyncio.wait_for(
+            call_model([
+                {"role": "system", "content": CLARIFICATION_SYSTEM_PROMPT},
+                {"role": "user", "content": user_message}
+            ], stream=False, temperature=0,
+            response_format={"type": "json_object"}),
+            timeout=15
+        )
+        data = json.loads(response)
+        if data.get("status") == "need_info":
+            return data.get("questions", "请提供更多细节。")
+        return None
+    except Exception as e:
+        logger.warning(f"信息充分性判断失败: {e}，跳过信息收集")
+        return None
 
 
 async def generate_plan(user_input: str, available_tools: List[ToolDict], context: str = "") -> Optional[Plan]:

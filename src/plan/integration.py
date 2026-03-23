@@ -3,10 +3,10 @@ from typing import List, Dict, Any, Optional, Callable, Awaitable
 
 from src.tools.tool_executor import ToolExecutor
 from src.plan.models import Plan
-from src.plan.planner import generate_plan, adjust_plan, classify_user_feedback, ToolDict
+from src.plan.planner import generate_plan, adjust_plan, classify_user_feedback, check_clarification_needed, ToolDict
 from src.plan.executor import execute_plan
 from src.plan.exceptions import PlanError
-from config import PLAN_MAX_ADJUSTMENTS
+from config import PLAN_MAX_ADJUSTMENTS, PLAN_MAX_CLARIFICATION_ROUNDS
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +53,28 @@ async def handle_planning_request(
     current_plan = None
     original_request = user_input
 
+    # === 阶段1：信息收集 ===
+    gathered_info_parts = []
+    for round_idx in range(PLAN_MAX_CLARIFICATION_ROUNDS):
+        gathered_info = "\n".join(gathered_info_parts) if gathered_info_parts else ""
+        question = await check_clarification_needed(original_request, gathered_info)
+        if question is None:
+            break  # 信息充足，进入计划生成
+        output_func(f"\n{OUTPUT_PREFIX}{question}")
+        user_answer = await async_input_func(INPUT_PREFIX)
+        gathered_info_parts.append(f"问：{question}\n答：{user_answer}")
+
+    # 将收集到的信息拼接为上下文，传给计划生成
+    clarification_context = "\n".join(gathered_info_parts)
+
+    # === 阶段2：计划生成与确认 ===
     for cycle in range(max_adjustments):
         if current_plan is None:
             # 生成初始计划
             try:
-                current_plan = await generate_plan(original_request, available_tools)
+                current_plan = await generate_plan(
+                    original_request, available_tools, context=clarification_context
+                )
             except PlanError as e:
                 logger.error(f"计划生成失败: {e}")
                 return "无法生成有效计划，请简化请求。"

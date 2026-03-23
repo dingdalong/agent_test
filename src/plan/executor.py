@@ -257,7 +257,7 @@ async def execute_plan(
 
     async def _run_step(step: Step) -> tuple:
         async def _exec():
-            logger.info(f"执行步骤 {step.id}: {step.description}")
+            logger.debug(f"执行步骤 {step.id}: {step.description}")
             result = await execute_step(step, context, tool_executor, async_input_func)
             return step.id, result
 
@@ -280,7 +280,7 @@ async def execute_plan(
                 failed_steps.add(step.id)
                 continue
             try:
-                logger.info(f"执行步骤 {step.id}: {step.description}")
+                logger.debug(f"执行步骤 {step.id}: {step.description}")
                 result = await execute_step(step, context, tool_executor, async_input_func)
                 context[step.id] = result
             except StepExecutionError as e:

@@ -23,6 +23,7 @@ class TestMainMemoryIntegration(unittest.TestCase):
             "src.core.async_api": types.SimpleNamespace(
                 call_model=AsyncMock(return_value=("stub", {}, "stop")),
                 execute_tool_calls=Mock(return_value=[]),
+                async_input=AsyncMock(return_value=""),
             ),
             "src.core.performance": types.SimpleNamespace(
                 time_function=Mock(return_value=lambda f: f),
@@ -33,6 +34,16 @@ class TestMainMemoryIntegration(unittest.TestCase):
                 VectorMemory=vector_memory_cls,
             ),
             "config": types.SimpleNamespace(USER_ID=user_id),
+            "tools.tool_call": types.SimpleNamespace(
+                execute_tool_calls=AsyncMock(return_value=[]),
+            ),
+            "core.guardrails": types.SimpleNamespace(
+                InputGuardrail=Mock(return_value=Mock(check=Mock(return_value=(True, "")))),
+                OutputGuardrail=Mock(return_value=Mock(check=Mock(return_value=(True, "")))),
+            ),
+            "src.plan.integration": types.SimpleNamespace(
+                handle_planning_request=AsyncMock(return_value=None),
+            ),
         }
 
         original_modules = {name: sys.modules.get(name) for name in stub_modules}
@@ -59,7 +70,7 @@ class TestMainMemoryIntegration(unittest.TestCase):
         main_module, _, user_facts, conversation_summaries = self._load_main_with_stubs()
         user_facts.search.return_value = [{"fact": "用户叫大龙"}]
         conversation_summaries.search.return_value = [{"fact": "之前讨论过记忆系统"}]
-        user_facts.add_conversation = Mock()
+        user_facts.add_conversation = AsyncMock()
 
         memory = Mock()
         memory.get_messages_for_api.return_value = [{"role": "user", "content": "你好"}]
@@ -67,16 +78,17 @@ class TestMainMemoryIntegration(unittest.TestCase):
 
         mock_call = AsyncMock(return_value=("最终回复", {}, "stop"))
         main_module.call_model = mock_call
+        # Stub is_complex_request to return False so we skip planning
+        main_module.is_complex_request = AsyncMock(return_value=False)
 
-        response = asyncio.run(main_module.run_agent("你好", memory, "系统提示"))
+        response = asyncio.run(main_module.run_agent("你好", memory))
 
         self.assertEqual(response, "最终回复")
         sent_messages = mock_call.call_args.args[0]
         system_content = sent_messages[0]["content"]
         self.assertIn("用户叫大龙", system_content)
         self.assertIn("之前讨论过记忆系统", system_content)
-        self.assertIn("系统提示", system_content)
-        user_facts.add_conversation.assert_called_once_with("你好", "最终回复")
+        user_facts.add_conversation.assert_called_once_with("你好")
 
 
 if __name__ == "__main__":

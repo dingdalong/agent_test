@@ -1,13 +1,25 @@
-from typing import List, Dict, Any, Optional, Callable
-import tiktoken
+import hashlib
+import json
 import logging
-import time
+import os
+import uuid
 from datetime import datetime, timezone
+from typing import List, Dict, Any, Optional, Union, Set, Callable
 
-logger = logging.getLogger(__name__)
+import chromadb
+import tiktoken
+from chromadb.config import Settings
 
 from src.core.async_api import call_model
 from src.core.performance import async_time_function, time_function
+
+from .embeddings import OllamaEmbeddingFunction
+from .memory_extractor import Fact, FactExtractor
+from .memory_types import Memory, MemoryType, MemoryRegistry, FactMemory, SummaryMemory
+from .serializer import flatten_metadata, MemorySerializer
+from .versioning import VersioningStrategyFactory
+
+logger = logging.getLogger(__name__)
 
 @async_time_function()
 async def summarize_conversation(messages: list) -> str:
@@ -208,24 +220,6 @@ class ConversationBuffer:
     def clear(self):
         self.messages.clear()
 
-import os
-import uuid
-import hashlib
-import json
-import logging
-from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional, Union, Set
-
-import chromadb
-from chromadb.config import Settings
-
-from .embeddings import OllamaEmbeddingFunction  # 假设已存在
-from .memory_extractor import Fact, FactExtractor  # 导入我们新定义的数据类
-from .serializer import flatten_metadata, MemorySerializer  # 迁移到 serializer 模块
-from .memory_types import Memory, MemoryType, MemoryRegistry, FactMemory, SummaryMemory  # 新记忆类型系统
-from .versioning import VersioningStrategyFactory  # 版本控制工厂
-
-logger = logging.getLogger(__name__)
 
 
 # ---------- 辅助函数 ----------

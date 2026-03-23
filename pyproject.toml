@@ -15,6 +15,12 @@ dependencies = [
     "pytest-asyncio>=0.25.0",  # 异步测试支持
 ]
 
+[tool.pytest.ini_options]
+markers = [
+    "slow: 性能/集成测试，默认跳过 (用 pytest -m slow 运行)",
+]
+addopts = "-m 'not slow'"
+
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"

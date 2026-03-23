@@ -5,7 +5,10 @@ from main import run_agent, ConversationBuffer
 
 logger = logging.getLogger(__name__)
 
-@pytest.mark.asyncio
+# 所有性能测试默认跳过，运行方式: pytest -m slow
+pytestmark = [pytest.mark.slow, pytest.mark.asyncio]
+
+
 async def test_single_conversation():
     """测试单轮对话的性能"""
     memory = ConversationBuffer()
@@ -15,7 +18,6 @@ async def test_single_conversation():
     logger.info(f"单轮对话耗时: {elapsed:.2f}s")
     return elapsed
 
-@pytest.mark.asyncio
 async def test_multiple_conversations():
     """测试多轮对话的性能"""
     memory = ConversationBuffer()
@@ -42,7 +44,6 @@ async def test_multiple_conversations():
     print(f"总耗时: {total_time:.2f}s, 平均每轮: {avg_time:.2f}s")
     return total_time
 
-@pytest.mark.asyncio
 async def test_empty_memory():
     """场景A：空记忆库测试 - 测试基础API调用和事实提取开销"""
     logger.info("=== 场景A：空记忆库测试 ===")
@@ -62,7 +63,6 @@ async def test_empty_memory():
         logger.info(f"空记忆库第{i+1}轮: {elapsed:.2f}s")
         print(f"空记忆库第{i+1}轮: {elapsed:.2f}s")
 
-@pytest.mark.asyncio
 async def test_with_existing_memory():
     """场景B：有记忆库测试 - 测试记忆检索和版本控制开销"""
     logger.info("=== 场景B：有记忆库测试 ===")
@@ -95,7 +95,6 @@ async def test_with_existing_memory():
         logger.info(f"有记忆库第{i+1}轮: {elapsed:.2f}s")
         print(f"有记忆库第{i+1}轮: {elapsed:.2f}s")
 
-@pytest.mark.asyncio
 async def test_long_conversation():
     """场景C：长对话测试 - 测试对话压缩和摘要生成开销"""
     logger.info("=== 场景C：长对话测试 ===")

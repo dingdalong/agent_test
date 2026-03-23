@@ -103,7 +103,7 @@ class TestVectorMemoryExtended(unittest.TestCase):
                 await buffer.compress(vector_memory=Mock(add_memory=mock_add_memory))
             return mock_add_memory
 
-        mock_add_memory = asyncio.get_event_loop().run_until_complete(_run())
+        mock_add_memory = asyncio.run(_run())
         memory_arg = mock_add_memory.call_args.args[0]
         self.assertIsInstance(memory_arg, SummaryMemory)
         self.assertEqual(memory_arg.conversation_id, "session-42")
@@ -552,7 +552,7 @@ class TestVectorMemoryExtended(unittest.TestCase):
                 self.assertIsInstance(memory_arg, Memory)
                 self.assertEqual(memory_arg.memory_type, MemoryType.SUMMARY)
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
 
     def test_error_handling_in_deserialize_memory(self):
         """Test error handling in _deserialize_memory."""

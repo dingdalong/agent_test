@@ -109,8 +109,8 @@ async def test_generate_plan_empty_steps():
             available_tools=available_tools
         )
 
-        assert hasattr(plan, 'steps') and hasattr(plan, 'context')
-        assert len(plan.steps) == 0
+        # 空步骤时 generate_plan 返回 None（表示不需要计划）
+        assert plan is None
 
 
 @pytest.mark.asyncio

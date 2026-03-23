@@ -174,14 +174,14 @@ async def test_handle_planning_request_cancel_after_max_adjustments():
 
 @pytest.mark.asyncio
 async def test_handle_planning_request_empty_plan():
-    """测试无法生成有效计划的情况"""
+    """测试模型判断不需要计划的情况（generate_plan 返回 None）"""
     available_tools = []
     mock_executor = MagicMock()
     mock_input_func = AsyncMock()
 
     with patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen:
-        # 返回空计划
-        mock_gen.return_value = Plan(steps=[])
+        # generate_plan 对空步骤返回 None（表示不需要计划）
+        mock_gen.return_value = None
 
         result = await handle_planning_request(
             user_input="测试请求",
@@ -190,7 +190,8 @@ async def test_handle_planning_request_empty_plan():
             async_input_func=mock_input_func
         )
 
-        assert result == "无法生成有效计划，请简化请求。"
+        # 返回 None 表示回退到普通对话
+        assert result is None
         # 不应该调用输入函数
         mock_input_func.assert_not_called()
 

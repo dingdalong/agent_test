@@ -48,3 +48,4 @@ if not logging.getLogger().hasHandlers():
             logging.StreamHandler()
         ]
     )
+    logging.getLogger("httpx").setLevel(logging.WARNING)

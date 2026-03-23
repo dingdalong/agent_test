@@ -1,9 +1,12 @@
 import asyncio
+import logging
 from typing import Dict, List, Any, Optional, Tuple, Callable, Union
 from openai import APIConnectionError, RateLimitError, APIError
 from config import async_client, MODEL_NAME, request_semaphore
 from .performance import async_time_function
 from src.utils.text import extract_json
+
+logger = logging.getLogger(__name__)
 
 @async_time_function()
 async def call_model(
@@ -44,7 +47,7 @@ async def call_model(
                 if attempt == max_retries - 1:
                     raise
                 wait_time = 2 ** attempt
-                print(f"API错误 ({type(e).__name__})，{wait_time}秒后重试...")
+                logger.warning(f"API错误 ({type(e).__name__})，{wait_time}秒后重试...")
                 await asyncio.sleep(wait_time)
 
             except APIError as e:

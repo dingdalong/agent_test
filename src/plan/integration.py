@@ -42,7 +42,7 @@ async def handle_planning_request(
     async_input_func: Callable[[str], Awaitable[str]],
     max_adjustments: int = PLAN_MAX_ADJUSTMENTS,
     output_func: Callable[[str], None] = _default_output
-) -> str:
+) -> Optional[str]:
     """
     处理需要规划的用户请求，包含确认和调整循环。
     返回最终执行结果（字符串）。
@@ -61,8 +61,8 @@ async def handle_planning_request(
             except PlanError as e:
                 logger.error(f"计划生成失败: {e}")
                 return "无法生成有效计划，请简化请求。"
-            if not current_plan.steps:
-                return "无法生成有效计划，请简化请求。"
+            if current_plan is None:
+                return None  # 模型判断不需要计划
 
         # 展示计划
         output_func("\n📋 我为你制定了以下计划：")
@@ -84,8 +84,9 @@ async def handle_planning_request(
             output_func("\n已根据你的意见调整计划。")
 
     # 达到最大调整次数，询问是否执行当前计划
+    assert current_plan is not None
     output_func("\n已达到最大调整次数，是否仍要执行当前计划？(y/n)")
-    final_confirm = await async_input_func()
+    final_confirm = await async_input_func("")
     if final_confirm.lower() == USER_PROMPT_FINAL_CONFIRM_YES:
         result_dict = await execute_plan(current_plan, tool_executor, async_input_func)
         return format_execution_results(current_plan, result_dict)

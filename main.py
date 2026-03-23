@@ -64,14 +64,16 @@ async def run_agent(user_input: str, memory: ConversationBuffer, system_prompt: 
         return "抱歉，您的输入包含不安全内容，已被拦截。"
 
     if await is_complex_request(user_input):
-        # 规划模式
-        await handle_planning_request(
+        # 尝试规划模式
+        result = await handle_planning_request(
             user_input,
             tools,          # 工具描述列表
             tool_executor,  # ToolExecutor 实例
             async_input     # 异步输入函数
         )
-        return ""  # 规划模式内部已打印所有输出，返回空
+        if result is not None:
+            return ""  # 规划模式内部已打印所有输出，返回空
+        # result 为 None 表示模型判断不需要计划，回退到普通对话
 
     """异步处理单次用户输入，集成长期记忆检索和存储"""
     memory_sections = []

@@ -11,7 +11,12 @@ from config import PLAN_GENERATION_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
-PLAN_GENERATION_SYSTEM_PROMPT = """你是一个任务规划助手。给定用户请求和可用工具，请生成一个逐步执行的任务计划。
+PLAN_GENERATION_SYSTEM_PROMPT = """你是一个任务规划助手。给定用户请求和可用工具，请判断该请求是否适合生成多步骤计划，并在适合时生成计划。
+
+重要规则：
+- 如果请求是简单的问答、闲聊、单步操作，或者无法拆解为多个有意义的步骤，请返回 {{"steps": []}}
+- 只有当请求确实需要多个步骤协作完成时，才生成计划
+
 请仅输出 JSON，不要包含任何其他说明或 Markdown 代码块标记。
 要求：
 1. 每个步骤对象包含字段：
@@ -96,8 +101,8 @@ def parse_plan_response(response: str) -> Plan:
         logger.error(f"{error_msg}, 原始响应: {response}")
         raise JSONParseError(error_msg, raw_response=response) from e
 
-async def generate_plan(user_input: str, available_tools: List[ToolDict], context: str = "") -> Plan:
-    """生成初始计划"""
+async def generate_plan(user_input: str, available_tools: List[ToolDict], context: str = "") -> Optional[Plan]:
+    """生成初始计划。如果模型判断请求不适合生成计划，返回 None。"""
     tools_desc = build_tools_description(available_tools)
 
     system_prompt = PLAN_GENERATION_SYSTEM_PROMPT.format(tools_desc=tools_desc)
@@ -118,7 +123,10 @@ async def generate_plan(user_input: str, available_tools: List[ToolDict], contex
     except Exception as e:
         raise APIGenerationError(f"API调用失败: {e}", api_error=e) from e
 
-    return parse_plan_response(response)
+    plan = parse_plan_response(response)
+    if not plan.steps:
+        return None
+    return plan
 
 async def adjust_plan(
     original_request: str,

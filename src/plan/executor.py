@@ -1,8 +1,9 @@
 import asyncio
 import logging
-from typing import Dict, Any, Optional, List, Callable, Awaitable
+from typing import Dict, Any, Optional, List, Callable
 
 from src.tools.tool_executor import ToolExecutor
+from src.core.async_api import async_input
 from src.plan.models import Plan, Step
 from src.plan.exceptions import VariableResolutionError, StepExecutionError, DependencyError, PlanValidationError
 from config import PLAN_DEFAULT_TIMEOUT, PLAN_MAX_VARIABLE_DEPTH
@@ -119,7 +120,7 @@ async def execute_step(
     step: Step,
     context: Dict[str, Any],
     tool_executor: ToolExecutor,
-    async_input_func: Optional[Callable[[str], Awaitable[str]]] = None,
+    on_input: Optional[Callable] = None,
     timeout: Optional[float] = None
 ) -> str:
     """执行单个步骤，返回结果字符串
@@ -128,7 +129,7 @@ async def execute_step(
         step: 要执行的步骤
         context: 上下文变量字典
         tool_executor: 工具执行器
-        async_input_func: 异步用户输入函数
+        on_input: 输入回调，支持同步/异步。默认 async_input。
         timeout: 超时时间（秒），None使用默认值，0表示不限制
     """
     step_timeout = timeout if timeout is not None else PLAN_DEFAULT_TIMEOUT
@@ -166,17 +167,14 @@ async def execute_step(
             ) from e
 
     elif step.action == ACTION_USER_INPUT:
-        if async_input_func is None:
-            raise StepExecutionError(
-                "需要用户输入，但未提供输入函数",
-                step_id=step.id,
-                step_description=step.description,
-                action=step.action
-            )
+        input_func = on_input if on_input is not None else async_input
         # 用户输入不设超时
         prompt = f"\n助手: {step.description or '请提供信息：'}\n\n你: "
         try:
-            user_input = await async_input_func(prompt)
+            if asyncio.iscoroutinefunction(input_func):
+                user_input = await input_func(prompt)
+            else:
+                user_input = await asyncio.to_thread(input_func, prompt)
             return user_input
         except Exception as e:
             raise StepExecutionError(
@@ -224,7 +222,7 @@ def validate_plan(plan: Plan) -> None:
 async def execute_plan(
     plan: Plan,
     tool_executor: ToolExecutor,
-    async_input_func: Optional[Callable[[str], Awaitable[str]]] = None,
+    on_input: Optional[Callable] = None,
     max_concurrency: Optional[int] = None,
     continue_on_error: bool = False
 ) -> Dict[str, Any]:
@@ -235,7 +233,7 @@ async def execute_plan(
     Args:
         plan: 要执行的计划
         tool_executor: 工具执行器
-        async_input_func: 异步用户输入函数
+        on_input: 输入回调，支持同步/异步。默认 async_input。
         max_concurrency: 最大并行度（None表示不限制）
         continue_on_error: 为True时，步骤失败不中断整个计划，
             失败步骤的结果记录为错误信息字符串，依赖失败步骤的后续步骤会被跳过
@@ -258,7 +256,7 @@ async def execute_plan(
     async def _run_step(step: Step) -> tuple:
         async def _exec():
             logger.debug(f"执行步骤 {step.id}: {step.description}")
-            result = await execute_step(step, context, tool_executor, async_input_func)
+            result = await execute_step(step, context, tool_executor, on_input)
             return step.id, result
 
         if semaphore:
@@ -281,7 +279,7 @@ async def execute_plan(
                 continue
             try:
                 logger.debug(f"执行步骤 {step.id}: {step.description}")
-                result = await execute_step(step, context, tool_executor, async_input_func)
+                result = await execute_step(step, context, tool_executor, on_input)
                 context[step.id] = result
             except StepExecutionError as e:
                 if not continue_on_error:

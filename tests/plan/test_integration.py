@@ -6,6 +6,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from src.plan.integration import handle_planning_request
 from src.plan.models import Plan, Step
 
+# 所有测试都需要 mock check_clarification_needed，避免调用真实 API
+PATCH_CLARIFICATION = patch(
+    'src.plan.integration.check_clarification_needed',
+    new_callable=AsyncMock,
+    return_value=None  # 不需要澄清
+)
+
 
 @pytest.mark.asyncio
 async def test_handle_planning_request_immediate_confirmation():
@@ -22,7 +29,8 @@ async def test_handle_planning_request_immediate_confirmation():
     # 模拟 execute_plan 返回结果
     mock_result = {"step1": "执行结果"}
 
-    with patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
+    with PATCH_CLARIFICATION, \
+         patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
          patch('src.plan.integration.execute_plan', new_callable=AsyncMock) as mock_exec, \
          patch('src.plan.integration.classify_user_feedback', new_callable=AsyncMock) as mock_classify:
 
@@ -35,18 +43,18 @@ async def test_handle_planning_request_immediate_confirmation():
             user_input="测试请求",
             available_tools=available_tools,
             tool_executor=mock_executor,
-            async_input_func=mock_input_func,
+            on_input=mock_input_func,
             max_adjustments=3
         )
 
         # 验证计划生成被调用
-        mock_gen.assert_called_once_with("测试请求", available_tools)
+        mock_gen.assert_called_once_with("测试请求", available_tools, context='')
 
         # 验证 LLM 分类被调用
         mock_classify.assert_called_once_with("确认", mock_plan)
 
         # 验证执行计划被调用
-        mock_exec.assert_called_once_with(mock_plan, mock_executor, mock_input_func)
+        mock_exec.assert_called_once_with(mock_plan, mock_executor, on_input=mock_input_func)
 
         # 验证结果格式化
         assert "测试步骤" in result
@@ -71,7 +79,8 @@ async def test_handle_planning_request_with_adjustment():
 
     mock_result = {"step1": "结果1", "step2": "结果2"}
 
-    with patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
+    with PATCH_CLARIFICATION, \
+         patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
          patch('src.plan.integration.adjust_plan', new_callable=AsyncMock) as mock_adj, \
          patch('src.plan.integration.execute_plan', new_callable=AsyncMock) as mock_exec, \
          patch('src.plan.integration.classify_user_feedback', new_callable=AsyncMock) as mock_classify:
@@ -88,7 +97,7 @@ async def test_handle_planning_request_with_adjustment():
             user_input="测试请求",
             available_tools=available_tools,
             tool_executor=mock_executor,
-            async_input_func=mock_input_func,
+            on_input=mock_input_func,
             max_adjustments=3
         )
 
@@ -98,7 +107,7 @@ async def test_handle_planning_request_with_adjustment():
         )
 
         # 验证执行了调整后的计划
-        mock_exec.assert_called_once_with(adjusted_plan, mock_executor, mock_input_func)
+        mock_exec.assert_called_once_with(adjusted_plan, mock_executor, on_input=mock_input_func)
 
         # 结果应包含两个步骤
         assert "调整后步骤" in result
@@ -118,7 +127,8 @@ async def test_handle_planning_request_max_adjustments():
 
     mock_result = {"step1": "结果"}
 
-    with patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
+    with PATCH_CLARIFICATION, \
+         patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
          patch('src.plan.integration.adjust_plan', new_callable=AsyncMock) as mock_adj, \
          patch('src.plan.integration.execute_plan', new_callable=AsyncMock) as mock_exec, \
          patch('src.plan.integration.classify_user_feedback', new_callable=AsyncMock) as mock_classify:
@@ -135,7 +145,7 @@ async def test_handle_planning_request_max_adjustments():
             user_input="测试请求",
             available_tools=available_tools,
             tool_executor=mock_executor,
-            async_input_func=mock_input_func,
+            on_input=mock_input_func,
             max_adjustments=3
         )
 
@@ -155,7 +165,8 @@ async def test_handle_planning_request_cancel_after_max_adjustments():
         Step(id="step1", description="测试步骤", action="tool", tool_name="test")
     ])
 
-    with patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
+    with PATCH_CLARIFICATION, \
+         patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
          patch('src.plan.integration.adjust_plan', new_callable=AsyncMock) as mock_adj, \
          patch('src.plan.integration.classify_user_feedback', new_callable=AsyncMock) as mock_classify:
 
@@ -169,7 +180,7 @@ async def test_handle_planning_request_cancel_after_max_adjustments():
             user_input="测试请求",
             available_tools=available_tools,
             tool_executor=mock_executor,
-            async_input_func=mock_input_func,
+            on_input=mock_input_func,
             max_adjustments=3
         )
 
@@ -183,7 +194,8 @@ async def test_handle_planning_request_empty_plan():
     mock_executor = MagicMock()
     mock_input_func = AsyncMock()
 
-    with patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen:
+    with PATCH_CLARIFICATION, \
+         patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen:
         # generate_plan 对空步骤返回 None（表示不需要计划）
         mock_gen.return_value = None
 
@@ -191,7 +203,7 @@ async def test_handle_planning_request_empty_plan():
             user_input="测试请求",
             available_tools=available_tools,
             tool_executor=mock_executor,
-            async_input_func=mock_input_func
+            on_input=mock_input_func
         )
 
         # 返回 None 表示回退到普通对话
@@ -213,7 +225,8 @@ async def test_handle_planning_request_llm_classification():
     mock_result = {"step1": "结果"}
 
     # 测试各种自然语言确认
-    with patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
+    with PATCH_CLARIFICATION, \
+         patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
          patch('src.plan.integration.execute_plan', new_callable=AsyncMock) as mock_exec, \
          patch('src.plan.integration.classify_user_feedback', new_callable=AsyncMock) as mock_classify:
 
@@ -226,7 +239,7 @@ async def test_handle_planning_request_llm_classification():
             user_input="测试",
             available_tools=available_tools,
             tool_executor=mock_executor,
-            async_input_func=mock_input_func
+            on_input=mock_input_func
         )
 
         mock_classify.assert_called_once_with("没问题，就这样吧", mock_plan)
@@ -256,7 +269,8 @@ async def test_handle_planning_request_result_formatting():
         # step3 没有结果
     }
 
-    with patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
+    with PATCH_CLARIFICATION, \
+         patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
          patch('src.plan.integration.execute_plan', new_callable=AsyncMock) as mock_exec, \
          patch('src.plan.integration.classify_user_feedback', new_callable=AsyncMock) as mock_classify:
 
@@ -269,7 +283,7 @@ async def test_handle_planning_request_result_formatting():
             user_input="测试",
             available_tools=available_tools,
             tool_executor=mock_executor,
-            async_input_func=mock_input_func
+            on_input=mock_input_func
         )
 
         lines = result.split('\n')
@@ -288,7 +302,8 @@ async def test_handle_planning_request_default_max_adjustments():
 
     mock_plan = Plan(steps=[Step(id="step1", description="测试", action="tool", tool_name="test")])
 
-    with patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
+    with PATCH_CLARIFICATION, \
+         patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
          patch('src.plan.integration.adjust_plan', new_callable=AsyncMock), \
          patch('src.plan.integration.classify_user_feedback', new_callable=AsyncMock) as mock_classify:
 
@@ -301,7 +316,7 @@ async def test_handle_planning_request_default_max_adjustments():
             user_input="测试",
             available_tools=available_tools,
             tool_executor=mock_executor,
-            async_input_func=mock_input_func
+            on_input=mock_input_func
         )
 
         assert result == "计划已取消。"

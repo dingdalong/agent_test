@@ -2,6 +2,7 @@ import re
 import asyncio
 
 from src.tools import tools, tool_executor
+from typing import Optional, Callable
 from src.core.async_api import call_model, async_input
 from src.memory.memory import ConversationBuffer, VectorMemory
 from config import USER_ID
@@ -56,11 +57,25 @@ async def is_complex_request(text: str) -> bool:
     return "yes" in content.lower()
 
 @async_time_function()
-async def run_agent(user_input: str, memory: ConversationBuffer, system_prompt: str = None):
+async def run_agent(
+    user_input: str,
+    memory: ConversationBuffer,
+    system_prompt: str = None,
+    on_output: Optional[Callable] = None,
+    on_input: Optional[Callable] = None
+):
+    """
+    Args:
+        on_output: 文本输出回调，支持同步/异步。用于流式 chunk 和计划展示等所有输出。
+                   不传则不输出。
+        on_input: 用户输入回调，支持同步/异步。不传则用 async_input。
+    """
+
     # 护栏：输入检查
     passed, reason = input_guard.check(user_input)
     if not passed:
-        print(f"\n[安全拦截] {reason}")
+        if on_output is not None:
+            on_output(f"\n[安全拦截] {reason}\n")
         return "抱歉，您的输入包含不安全内容，已被拦截。"
 
     if await is_complex_request(user_input):
@@ -69,7 +84,8 @@ async def run_agent(user_input: str, memory: ConversationBuffer, system_prompt: 
             user_input,
             tools,          # 工具描述列表
             tool_executor,  # ToolExecutor 实例
-            async_input     # 异步输入函数
+            on_output=on_output,
+            on_input=on_input
         )
         if result is not None:
             return ""  # 规划模式内部已打印所有输出，返回空
@@ -109,7 +125,9 @@ async def run_agent(user_input: str, memory: ConversationBuffer, system_prompt: 
 
         enhanced_system = enhanced_system + "\n\n如果工具返回错误，请分析错误信息并尝试重新调用（调整参数），或向用户解释。"
         messages = [{"role": "system", "content": enhanced_system}] + memory.get_messages_for_api()
-        content, tool_calls, _ = await call_model(messages, stream=True, tools=tools)
+        content, tool_calls, _ = await call_model(
+            messages, stream=True, tools=tools, on_output=on_output
+        )
 
         if not tool_calls:
             # 没有工具调用，将助手回复存入短期记忆并结束
@@ -145,7 +163,10 @@ async def main():
             break
 
         print("助手: ", end="", flush=True)
-        await run_agent(user_input, memory)
+        await run_agent(
+            user_input, memory,
+            on_output=lambda s: print(s, end="", flush=True)
+        )
         print()  # 确保换行
 
 

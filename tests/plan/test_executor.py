@@ -3,7 +3,7 @@
 """
 import asyncio
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from src.plan.executor import resolve_variables, execute_step, execute_plan, validate_plan, topological_sort_layered
 from src.plan.models import Step, Plan
 from src.plan.exceptions import StepExecutionError, PlanValidationError, DependencyError
@@ -145,7 +145,7 @@ async def test_execute_step_user_input():
     mock_input_func.return_value = "用户输入内容"
 
     result = await execute_step(
-        step, {}, MagicMock(), async_input_func=mock_input_func
+        step, {}, MagicMock(), on_input=mock_input_func
     )
 
     mock_input_func.assert_called_once_with("\n助手: 请输入信息\n\n你: ")
@@ -153,20 +153,20 @@ async def test_execute_step_user_input():
 
 
 @pytest.mark.asyncio
-async def test_execute_step_user_input_no_function():
-    """测试没有输入函数的用户输入步骤"""
+async def test_execute_step_user_input_default():
+    """测试 on_input=None 时使用默认 async_input"""
     step = Step(
         id="step1",
         description="请输入",
         action="user_input"
     )
 
-    with pytest.raises(StepExecutionError) as exc_info:
-        await execute_step(step, {}, MagicMock(), async_input_func=None)
+    with patch('src.plan.executor.async_input', new_callable=AsyncMock) as mock_default:
+        mock_default.return_value = "默认输入"
+        result = await execute_step(step, {}, MagicMock(), on_input=None)
 
-    assert "需要用户输入，但未提供输入函数" in str(exc_info.value)
-    assert step.id in str(exc_info.value)
-    assert step.description in str(exc_info.value)
+    assert result == "默认输入"
+    mock_default.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -256,7 +256,7 @@ async def test_execute_plan_with_user_input():
     mock_input_func.return_value = "用户提供的数据"
 
     result = await execute_plan(
-        plan, mock_executor, async_input_func=mock_input_func
+        plan, mock_executor, on_input=mock_input_func
     )
 
     mock_input_func.assert_called_once_with("\n助手: 获取输入\n\n你: ")

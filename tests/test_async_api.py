@@ -47,7 +47,7 @@ async def test_parse_nonstream_response():
         choices = [MockChoice()]
 
     response = MockResponse()
-    content, tool_calls, finish_reason = await parse_nonstream_response(response, False)
+    content, tool_calls, finish_reason = await parse_nonstream_response(response)
 
     assert content == "Hello"
     assert tool_calls == {}

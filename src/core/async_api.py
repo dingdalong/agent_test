@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Dict, List, Any, Optional, Tuple, Callable, Union
+from typing import Dict, List, Any, Optional, Tuple, Callable
 from openai import APIConnectionError, RateLimitError, APIError
 from config import async_client, MODEL_NAME, request_semaphore
 from .performance import async_time_function
@@ -16,10 +16,17 @@ async def call_model(
     tools: Optional[List[Dict]] = None,
     max_retries: int = 3,
     timeout: float = 30.0,
-    response_format: Optional[Dict[str, str]] = None
+    response_format: Optional[Dict[str, str]] = None,
+    on_output: Optional[Callable] = None
 ) -> Tuple[str, Dict[int, Dict[str, str]], Optional[str]]:
     """
     纯异步模型调用，带指数退避重试和并发控制
+
+    Args:
+        on_output: 可选回调函数，接收文本片段。支持同步和异步函数。
+                  stream=True 时每收到一个 chunk 调用一次；
+                  stream=False 时用完整内容调用一次。
+                  不传则静默返回结果，不做任何输出。
     """
     async with request_semaphore:
         for attempt in range(max_retries):
@@ -39,9 +46,9 @@ async def call_model(
 
                     is_json = response_format and response_format.get("type") == "json_object"
                     if stream:
-                        return await parse_stream_response(response, stream_output=True, clean_json=is_json)
+                        return await parse_stream_response(response, on_output=on_output, clean_json=is_json)
                     else:
-                        return await parse_nonstream_response(response, stream_output=False, clean_json=is_json)
+                        return await parse_nonstream_response(response, on_output=on_output, clean_json=is_json)
 
             except (APIConnectionError, RateLimitError, asyncio.TimeoutError) as e:
                 if attempt == max_retries - 1:
@@ -55,11 +62,14 @@ async def call_model(
 
 async def parse_stream_response(
     stream,
-    stream_output: Union[bool, Callable] = True,
+    on_output: Optional[Callable] = None,
     clean_json: bool = False
 ) -> Tuple[str, Dict[int, Dict[str, str]], Optional[str]]:
     """
-    异步迭代流式响应，支持异步回调
+    异步迭代流式响应
+
+    Args:
+        on_output: 可选回调，每收到文本片段调用一次。支持同步/异步函数。
     """
     tool_calls = {}
     content_parts = []
@@ -72,14 +82,11 @@ async def parse_stream_response(
         if delta.content:
             if not (delta.tool_calls and delta.content.isspace()):
                 content_parts.append(delta.content)
-                if stream_output:
-                    if callable(stream_output):
-                        if asyncio.iscoroutinefunction(stream_output):
-                            await stream_output(delta.content)
-                        else:
-                            await asyncio.to_thread(stream_output, delta.content)
+                if on_output is not None:
+                    if asyncio.iscoroutinefunction(on_output):
+                        await on_output(delta.content)
                     else:
-                        print(delta.content, end="", flush=True)
+                        await asyncio.to_thread(on_output, delta.content)
 
         # 处理工具调用
         if delta.tool_calls:
@@ -97,9 +104,6 @@ async def parse_stream_response(
         if chunk.choices[0].finish_reason:
             finish_reason = chunk.choices[0].finish_reason
 
-    if stream_output and not callable(stream_output):
-        print()
-
     content = "".join(content_parts)
     if clean_json:
         content = extract_json(content)
@@ -107,11 +111,14 @@ async def parse_stream_response(
 
 async def parse_nonstream_response(
     response,
-    stream_output: Union[bool, Callable] = True,
+    on_output: Optional[Callable] = None,
     clean_json: bool = False
 ) -> Tuple[str, Dict[int, Dict[str, str]], Optional[str]]:
     """
-    异步解析非流式响应
+    解析非流式响应
+
+    Args:
+        on_output: 可选回调，用完整内容调用一次。支持同步/异步函数。
     """
     message = response.choices[0].message
     content = message.content or ""
@@ -129,15 +136,11 @@ async def parse_nonstream_response(
                 "arguments": tool_call.function.arguments
             }
 
-    # 输出处理
-    if stream_output:
-        if callable(stream_output):
-            if asyncio.iscoroutinefunction(stream_output):
-                await stream_output(content)
-            else:
-                await asyncio.to_thread(stream_output, content)
+    if on_output is not None:
+        if asyncio.iscoroutinefunction(on_output):
+            await on_output(content)
         else:
-            print(content)
+            await asyncio.to_thread(on_output, content)
 
     return content, tool_calls_dict, finish_reason
 

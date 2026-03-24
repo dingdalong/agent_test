@@ -43,11 +43,9 @@ async def summarize_conversation(messages: list) -> str:
             prompt += f"助手：{content}\n"
         # tool 消息也可考虑，但摘要中可能不需要细节，简化处理
 
-    # 调用模型（使用非流式）
     response, _, _ = await call_model(
         messages=[{"role": "user", "content": prompt}],
-        stream=False,
-        tools=None  # 摘要不需要工具
+        silent=True,
     )
 
     return response

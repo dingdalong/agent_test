@@ -263,7 +263,8 @@ class FactExtractor:
             ]
             response, tool_calls, finish_reason = await call_model(
                 prompt, temperature=0.0,
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
+                silent=True,
             )
             if not response:
                 return None

@@ -287,36 +287,25 @@ async def test_generate_plan_with_context():
 
 
 @pytest.mark.asyncio
-async def test_generate_plan_timeout():
-    """测试计划生成超时"""
-    import asyncio
+async def test_generate_plan_api_error():
+    """测试计划生成 API 调用失败时抛出 APIGenerationError"""
+    from src.plan.exceptions import APIGenerationError
 
-    async def slow_call(*args, **kwargs):
-        await asyncio.sleep(100)
-        return ("", {}, {})
-
-    with patch('src.plan.planner.call_model', side_effect=slow_call), \
-         patch('src.plan.planner.PLAN_GENERATION_TIMEOUT', 0.01):
-        with pytest.raises(Exception) as exc_info:
+    with patch('src.plan.planner.call_model', new_callable=AsyncMock) as mock_call:
+        mock_call.side_effect = Exception("连接失败")
+        with pytest.raises(APIGenerationError):
             await generate_plan("测试", [])
-        assert "超时" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
-async def test_adjust_plan_timeout():
-    """测试计划调整超时返回原计划"""
-    import asyncio
-
-    async def slow_call(*args, **kwargs):
-        await asyncio.sleep(100)
-        return ("", {}, {})
-
+async def test_adjust_plan_api_error():
+    """测试计划调整 API 调用失败时返回原计划"""
     original_plan = Plan(steps=[
         Step(id="s1", description="原始", action="tool", tool_name="t")
     ])
 
-    with patch('src.plan.planner.call_model', side_effect=slow_call), \
-         patch('src.plan.planner.PLAN_GENERATION_TIMEOUT', 0.01):
+    with patch('src.plan.planner.call_model', new_callable=AsyncMock) as mock_call:
+        mock_call.side_effect = Exception("连接失败")
         result = await adjust_plan("测试", original_plan, "反馈", [])
         assert result == original_plan
 

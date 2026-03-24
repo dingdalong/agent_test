@@ -1,9 +1,10 @@
 import asyncio
 import logging
-from typing import Dict, Any, Optional, List, Callable
+from typing import Dict, Any, Optional, List
 
 from src.tools.tool_executor import ToolExecutor
-from src.core.async_api import async_input
+from src.core.async_api import call_model
+from src.core.io import agent_input
 from src.plan.models import Plan, Step
 from src.plan.exceptions import VariableResolutionError, StepExecutionError, DependencyError, PlanValidationError
 from config import PLAN_DEFAULT_TIMEOUT, PLAN_MAX_VARIABLE_DEPTH
@@ -116,11 +117,32 @@ def topological_sort_layered(steps: List[Step]) -> List[List[Step]]:
     return layers
 
 
+def _build_subtask_prompt(step: Step, context: Dict[str, Any]) -> str:
+    """构建子任务的 LLM 提示词，包含任务描述和前序步骤结果"""
+    parts = []
+
+    # 主任务描述
+    subtask_prompt = step.subtask_prompt or step.description
+    # 解析 prompt 中的变量引用
+    resolved_prompt = resolve_variables(subtask_prompt, context)
+    parts.append(f"任务：{resolved_prompt}")
+
+    # 附加前序步骤的结果作为参考
+    if context:
+        parts.append("\n参考信息（前序步骤结果）：")
+        for step_id, result in context.items():
+            result_str = str(result)
+            if len(result_str) > 500:
+                result_str = result_str[:500] + "..."
+            parts.append(f"- {step_id}: {result_str}")
+
+    return "\n".join(parts)
+
+
 async def execute_step(
     step: Step,
     context: Dict[str, Any],
     tool_executor: ToolExecutor,
-    on_input: Optional[Callable] = None,
     timeout: Optional[float] = None
 ) -> str:
     """执行单个步骤，返回结果字符串
@@ -129,7 +151,6 @@ async def execute_step(
         step: 要执行的步骤
         context: 上下文变量字典
         tool_executor: 工具执行器
-        on_input: 输入回调，支持同步/异步。默认 async_input。
         timeout: 超时时间（秒），None使用默认值，0表示不限制
     """
     step_timeout = timeout if timeout is not None else PLAN_DEFAULT_TIMEOUT
@@ -167,14 +188,10 @@ async def execute_step(
             ) from e
 
     elif step.action == ACTION_USER_INPUT:
-        input_func = on_input if on_input is not None else async_input
         # 用户输入不设超时
         prompt = f"\n助手: {step.description or '请提供信息：'}\n\n你: "
         try:
-            if asyncio.iscoroutinefunction(input_func):
-                user_input = await input_func(prompt)
-            else:
-                user_input = await asyncio.to_thread(input_func, prompt)
+            user_input = await agent_input(prompt)
             return user_input
         except Exception as e:
             raise StepExecutionError(
@@ -185,7 +202,31 @@ async def execute_step(
             ) from e
 
     elif step.action == ACTION_SUBTASK:
-        return f"子任务未实现：{step.subtask_prompt}"
+        prompt = _build_subtask_prompt(step, context)
+        messages = [
+            {"role": "system", "content": "你是一个任务执行助手。请根据任务描述和上下文信息，生成详细的内容。"},
+            {"role": "user", "content": prompt}
+        ]
+        try:
+            # 使用流式调用，避免生成长文本时 HTTP 超时
+            response, _, _ = await call_model(messages)
+            return response
+        except (asyncio.TimeoutError, TimeoutError) as e:
+            raise StepExecutionError(
+                f"子任务执行超时({step_timeout}秒)",
+                step_id=step.id,
+                step_description=step.description,
+                action=step.action
+            ) from e
+        except StepExecutionError:
+            raise
+        except Exception as e:
+            raise StepExecutionError(
+                f"子任务执行失败: {e}",
+                step_id=step.id,
+                step_description=step.description,
+                action=step.action
+            ) from e
 
     else:
         raise StepExecutionError(
@@ -222,7 +263,6 @@ def validate_plan(plan: Plan) -> None:
 async def execute_plan(
     plan: Plan,
     tool_executor: ToolExecutor,
-    on_input: Optional[Callable] = None,
     max_concurrency: Optional[int] = None,
     continue_on_error: bool = False
 ) -> Dict[str, Any]:
@@ -233,7 +273,6 @@ async def execute_plan(
     Args:
         plan: 要执行的计划
         tool_executor: 工具执行器
-        on_input: 输入回调，支持同步/异步。默认 async_input。
         max_concurrency: 最大并行度（None表示不限制）
         continue_on_error: 为True时，步骤失败不中断整个计划，
             失败步骤的结果记录为错误信息字符串，依赖失败步骤的后续步骤会被跳过
@@ -256,7 +295,7 @@ async def execute_plan(
     async def _run_step(step: Step) -> tuple:
         async def _exec():
             logger.debug(f"执行步骤 {step.id}: {step.description}")
-            result = await execute_step(step, context, tool_executor, on_input)
+            result = await execute_step(step, context, tool_executor)
             return step.id, result
 
         if semaphore:
@@ -279,7 +318,7 @@ async def execute_plan(
                 continue
             try:
                 logger.debug(f"执行步骤 {step.id}: {step.description}")
-                result = await execute_step(step, context, tool_executor, on_input)
+                result = await execute_step(step, context, tool_executor)
                 context[step.id] = result
             except StepExecutionError as e:
                 if not continue_on_error:

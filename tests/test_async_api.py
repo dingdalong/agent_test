@@ -1,58 +1,73 @@
 import pytest
 import asyncio
-from src.core.async_api import call_model, parse_nonstream_response
+from src.core.async_api import call_model, parse_stream_response
 from src.core.performance import async_time_function
 
 
 @pytest.mark.asyncio
 async def test_call_model_mocked(mocker):
-    """测试异步调用结构（使用模拟）"""
-    # 创建模拟响应对象
-    class MockMessage:
+    """测试异步调用结构（使用模拟，统一流式）"""
+    # 创建模拟流式响应
+    class MockDelta:
         content = "Hello, world!"
         tool_calls = None
 
     class MockChoice:
-        message = MockMessage()
+        delta = MockDelta()
         finish_reason = "stop"
 
-    class MockResponse:
+    class MockChunk:
         choices = [MockChoice()]
 
-    # 模拟异步调用返回正确的响应对象
+    async def mock_stream():
+        yield MockChunk()
+
     async def mock_create(*args, **kwargs):
-        return MockResponse()
+        assert kwargs.get("stream") is True, "call_model 应该始终使用流式调用"
+        return mock_stream()
 
     mocker.patch('config.async_client.chat.completions.create', side_effect=mock_create)
     messages = [{"role": "user", "content": "Hello"}]
 
-    content, tool_calls, finish_reason = await call_model(messages, stream=False)
+    content, tool_calls, finish_reason = await call_model(messages)
     assert content == "Hello, world!"
     assert tool_calls == {}
     assert finish_reason == "stop"
 
+
 @pytest.mark.asyncio
-async def test_parse_nonstream_response():
-    """测试非流式响应解析"""
-    # 创建模拟响应对象
-    class MockMessage:
+async def test_parse_stream_response():
+    """测试流式响应解析"""
+    class MockDelta1:
         content = "Hello"
         tool_calls = None
 
-    class MockChoice:
-        message = MockMessage()
+    class MockChoice1:
+        delta = MockDelta1()
+        finish_reason = None
+
+    class MockChunk1:
+        choices = [MockChoice1()]
+
+    class MockDelta2:
+        content = " World"
+        tool_calls = None
+
+    class MockChoice2:
+        delta = MockDelta2()
         finish_reason = "stop"
 
-    class MockResponse:
-        choices = [MockChoice()]
+    class MockChunk2:
+        choices = [MockChoice2()]
 
-    response = MockResponse()
-    content, tool_calls, finish_reason = await parse_nonstream_response(response)
+    async def mock_stream():
+        yield MockChunk1()
+        yield MockChunk2()
 
-    assert content == "Hello"
+    content, tool_calls, finish_reason = await parse_stream_response(mock_stream())
+    assert content == "Hello World"
     assert tool_calls == {}
     assert finish_reason == "stop"
-
 
 
 @pytest.mark.asyncio

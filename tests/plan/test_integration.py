@@ -13,13 +13,15 @@ PATCH_CLARIFICATION = patch(
     return_value=None  # 不需要澄清
 )
 
+# mock 全局 IO，避免真实控制台交互
+PATCH_OUTPUT = patch('src.plan.integration.agent_output', new_callable=AsyncMock)
+
 
 @pytest.mark.asyncio
 async def test_handle_planning_request_immediate_confirmation():
     """测试用户立即确认计划"""
     available_tools = [{"function": {"name": "test", "description": "测试工具"}}]
     mock_executor = MagicMock()
-    mock_input_func = AsyncMock()
 
     # 模拟 generate_plan 返回一个简单计划
     mock_plan = Plan(steps=[
@@ -29,7 +31,8 @@ async def test_handle_planning_request_immediate_confirmation():
     # 模拟 execute_plan 返回结果
     mock_result = {"step1": "执行结果"}
 
-    with PATCH_CLARIFICATION, \
+    with PATCH_CLARIFICATION, PATCH_OUTPUT, \
+         patch('src.plan.integration.agent_input', new_callable=AsyncMock) as mock_input, \
          patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
          patch('src.plan.integration.execute_plan', new_callable=AsyncMock) as mock_exec, \
          patch('src.plan.integration.classify_user_feedback', new_callable=AsyncMock) as mock_classify:
@@ -37,13 +40,12 @@ async def test_handle_planning_request_immediate_confirmation():
         mock_gen.return_value = mock_plan
         mock_exec.return_value = mock_result
         mock_classify.return_value = "confirm"
-        mock_input_func.return_value = "确认"
+        mock_input.return_value = "确认"
 
         result = await handle_planning_request(
             user_input="测试请求",
             available_tools=available_tools,
             tool_executor=mock_executor,
-            on_input=mock_input_func,
             max_adjustments=3
         )
 
@@ -54,7 +56,7 @@ async def test_handle_planning_request_immediate_confirmation():
         mock_classify.assert_called_once_with("确认", mock_plan)
 
         # 验证执行计划被调用
-        mock_exec.assert_called_once_with(mock_plan, mock_executor, on_input=mock_input_func)
+        mock_exec.assert_called_once_with(mock_plan, mock_executor, continue_on_error=True)
 
         # 验证结果格式化
         assert "测试步骤" in result
@@ -66,7 +68,6 @@ async def test_handle_planning_request_with_adjustment():
     """测试用户调整计划后再确认"""
     available_tools = []
     mock_executor = MagicMock()
-    mock_input_func = AsyncMock()
 
     original_plan = Plan(steps=[
         Step(id="step1", description="原始步骤", action="tool", tool_name="test")
@@ -79,7 +80,8 @@ async def test_handle_planning_request_with_adjustment():
 
     mock_result = {"step1": "结果1", "step2": "结果2"}
 
-    with PATCH_CLARIFICATION, \
+    with PATCH_CLARIFICATION, PATCH_OUTPUT, \
+         patch('src.plan.integration.agent_input', new_callable=AsyncMock) as mock_input, \
          patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
          patch('src.plan.integration.adjust_plan', new_callable=AsyncMock) as mock_adj, \
          patch('src.plan.integration.execute_plan', new_callable=AsyncMock) as mock_exec, \
@@ -91,13 +93,12 @@ async def test_handle_planning_request_with_adjustment():
         # 第一轮：调整；第二轮：确认
         mock_classify.side_effect = ["adjust", "confirm"]
 
-        mock_input_func.side_effect = ["修改：添加一个步骤", "确认"]
+        mock_input.side_effect = ["修改：添加一个步骤", "确认"]
 
         result = await handle_planning_request(
             user_input="测试请求",
             available_tools=available_tools,
             tool_executor=mock_executor,
-            on_input=mock_input_func,
             max_adjustments=3
         )
 
@@ -107,7 +108,7 @@ async def test_handle_planning_request_with_adjustment():
         )
 
         # 验证执行了调整后的计划
-        mock_exec.assert_called_once_with(adjusted_plan, mock_executor, on_input=mock_input_func)
+        mock_exec.assert_called_once_with(adjusted_plan, mock_executor, continue_on_error=True)
 
         # 结果应包含两个步骤
         assert "调整后步骤" in result
@@ -119,7 +120,6 @@ async def test_handle_planning_request_max_adjustments():
     """测试达到最大调整次数"""
     available_tools = []
     mock_executor = MagicMock()
-    mock_input_func = AsyncMock()
 
     mock_plan = Plan(steps=[
         Step(id="step1", description="最终计划", action="tool", tool_name="test")
@@ -127,7 +127,8 @@ async def test_handle_planning_request_max_adjustments():
 
     mock_result = {"step1": "结果"}
 
-    with PATCH_CLARIFICATION, \
+    with PATCH_CLARIFICATION, PATCH_OUTPUT, \
+         patch('src.plan.integration.agent_input', new_callable=AsyncMock) as mock_input, \
          patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
          patch('src.plan.integration.adjust_plan', new_callable=AsyncMock) as mock_adj, \
          patch('src.plan.integration.execute_plan', new_callable=AsyncMock) as mock_exec, \
@@ -139,13 +140,12 @@ async def test_handle_planning_request_max_adjustments():
         # 3次都判断为调整
         mock_classify.return_value = "adjust"
 
-        mock_input_func.side_effect = ["修改1", "修改2", "修改3", "y"]
+        mock_input.side_effect = ["修改1", "修改2", "修改3", "y"]
 
         result = await handle_planning_request(
             user_input="测试请求",
             available_tools=available_tools,
             tool_executor=mock_executor,
-            on_input=mock_input_func,
             max_adjustments=3
         )
 
@@ -159,13 +159,13 @@ async def test_handle_planning_request_cancel_after_max_adjustments():
     """测试达到最大调整次数后取消"""
     available_tools = []
     mock_executor = MagicMock()
-    mock_input_func = AsyncMock()
 
     mock_plan = Plan(steps=[
         Step(id="step1", description="测试步骤", action="tool", tool_name="test")
     ])
 
-    with PATCH_CLARIFICATION, \
+    with PATCH_CLARIFICATION, PATCH_OUTPUT, \
+         patch('src.plan.integration.agent_input', new_callable=AsyncMock) as mock_input, \
          patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
          patch('src.plan.integration.adjust_plan', new_callable=AsyncMock) as mock_adj, \
          patch('src.plan.integration.classify_user_feedback', new_callable=AsyncMock) as mock_classify:
@@ -174,13 +174,12 @@ async def test_handle_planning_request_cancel_after_max_adjustments():
         mock_adj.return_value = mock_plan
         mock_classify.return_value = "adjust"
 
-        mock_input_func.side_effect = ["修改1", "修改2", "修改3", "n"]
+        mock_input.side_effect = ["修改1", "修改2", "修改3", "n"]
 
         result = await handle_planning_request(
             user_input="测试请求",
             available_tools=available_tools,
             tool_executor=mock_executor,
-            on_input=mock_input_func,
             max_adjustments=3
         )
 
@@ -192,9 +191,9 @@ async def test_handle_planning_request_empty_plan():
     """测试模型判断不需要计划的情况（generate_plan 返回 None）"""
     available_tools = []
     mock_executor = MagicMock()
-    mock_input_func = AsyncMock()
 
-    with PATCH_CLARIFICATION, \
+    with PATCH_CLARIFICATION, PATCH_OUTPUT, \
+         patch('src.plan.integration.agent_input', new_callable=AsyncMock) as mock_input, \
          patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen:
         # generate_plan 对空步骤返回 None（表示不需要计划）
         mock_gen.return_value = None
@@ -203,13 +202,12 @@ async def test_handle_planning_request_empty_plan():
             user_input="测试请求",
             available_tools=available_tools,
             tool_executor=mock_executor,
-            on_input=mock_input_func
         )
 
         # 返回 None 表示回退到普通对话
         assert result is None
         # 不应该调用输入函数
-        mock_input_func.assert_not_called()
+        mock_input.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -217,7 +215,6 @@ async def test_handle_planning_request_llm_classification():
     """测试LLM分类确认和调整"""
     available_tools = []
     mock_executor = MagicMock()
-    mock_input_func = AsyncMock()
 
     mock_plan = Plan(steps=[
         Step(id="step1", description="测试", action="tool", tool_name="test")
@@ -225,7 +222,8 @@ async def test_handle_planning_request_llm_classification():
     mock_result = {"step1": "结果"}
 
     # 测试各种自然语言确认
-    with PATCH_CLARIFICATION, \
+    with PATCH_CLARIFICATION, PATCH_OUTPUT, \
+         patch('src.plan.integration.agent_input', new_callable=AsyncMock) as mock_input, \
          patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
          patch('src.plan.integration.execute_plan', new_callable=AsyncMock) as mock_exec, \
          patch('src.plan.integration.classify_user_feedback', new_callable=AsyncMock) as mock_classify:
@@ -233,13 +231,12 @@ async def test_handle_planning_request_llm_classification():
         mock_gen.return_value = mock_plan
         mock_exec.return_value = mock_result
         mock_classify.return_value = "confirm"
-        mock_input_func.return_value = "没问题，就这样吧"
+        mock_input.return_value = "没问题，就这样吧"
 
         result = await handle_planning_request(
             user_input="测试",
             available_tools=available_tools,
             tool_executor=mock_executor,
-            on_input=mock_input_func
         )
 
         mock_classify.assert_called_once_with("没问题，就这样吧", mock_plan)
@@ -252,7 +249,6 @@ async def test_handle_planning_request_result_formatting():
     """测试结果格式化"""
     available_tools = []
     mock_executor = MagicMock()
-    mock_input_func = AsyncMock()
 
     # 创建包含多个步骤的计划
     steps = [
@@ -269,7 +265,8 @@ async def test_handle_planning_request_result_formatting():
         # step3 没有结果
     }
 
-    with PATCH_CLARIFICATION, \
+    with PATCH_CLARIFICATION, PATCH_OUTPUT, \
+         patch('src.plan.integration.agent_input', new_callable=AsyncMock) as mock_input, \
          patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
          patch('src.plan.integration.execute_plan', new_callable=AsyncMock) as mock_exec, \
          patch('src.plan.integration.classify_user_feedback', new_callable=AsyncMock) as mock_classify:
@@ -277,13 +274,12 @@ async def test_handle_planning_request_result_formatting():
         mock_gen.return_value = mock_plan
         mock_exec.return_value = mock_result
         mock_classify.return_value = "confirm"
-        mock_input_func.return_value = "确认"
+        mock_input.return_value = "确认"
 
         result = await handle_planning_request(
             user_input="测试",
             available_tools=available_tools,
             tool_executor=mock_executor,
-            on_input=mock_input_func
         )
 
         lines = result.split('\n')
@@ -298,11 +294,11 @@ async def test_handle_planning_request_default_max_adjustments():
     """测试默认最大调整次数"""
     available_tools = []
     mock_executor = MagicMock()
-    mock_input_func = AsyncMock()
 
     mock_plan = Plan(steps=[Step(id="step1", description="测试", action="tool", tool_name="test")])
 
-    with PATCH_CLARIFICATION, \
+    with PATCH_CLARIFICATION, PATCH_OUTPUT, \
+         patch('src.plan.integration.agent_input', new_callable=AsyncMock) as mock_input, \
          patch('src.plan.integration.generate_plan', new_callable=AsyncMock) as mock_gen, \
          patch('src.plan.integration.adjust_plan', new_callable=AsyncMock), \
          patch('src.plan.integration.classify_user_feedback', new_callable=AsyncMock) as mock_classify:
@@ -310,13 +306,12 @@ async def test_handle_planning_request_default_max_adjustments():
         mock_gen.return_value = mock_plan
         mock_classify.return_value = "adjust"
 
-        mock_input_func.side_effect = ["修改1", "修改2", "修改3", "修改4", "n"]
+        mock_input.side_effect = ["修改1", "修改2", "修改3", "修改4", "n"]
 
         result = await handle_planning_request(
             user_input="测试",
             available_tools=available_tools,
             tool_executor=mock_executor,
-            on_input=mock_input_func
         )
 
         assert result == "计划已取消。"

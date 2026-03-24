@@ -211,3 +211,4 @@ chroma_data/
 # Worktrees for isolated development
 .worktrees/*
 .claude/
+workspace/*

@@ -141,47 +141,112 @@ async def test_execute_step_user_input():
         action="user_input"
     )
 
-    mock_input_func = AsyncMock()
-    mock_input_func.return_value = "用户输入内容"
+    with patch('src.plan.executor.agent_input', new_callable=AsyncMock) as mock_input:
+        mock_input.return_value = "用户输入内容"
+        result = await execute_step(step, {}, MagicMock())
 
-    result = await execute_step(
-        step, {}, MagicMock(), on_input=mock_input_func
-    )
-
-    mock_input_func.assert_called_once_with("\n助手: 请输入信息\n\n你: ")
+    mock_input.assert_called_once_with("\n助手: 请输入信息\n\n你: ")
     assert result == "用户输入内容"
 
 
 @pytest.mark.asyncio
-async def test_execute_step_user_input_default():
-    """测试 on_input=None 时使用默认 async_input"""
+async def test_execute_step_subtask():
+    """测试执行子任务步骤：调用 LLM 生成内容"""
     step = Step(
         id="step1",
-        description="请输入",
-        action="user_input"
+        description="制定行程草案",
+        action="subtask",
+        subtask_prompt="根据天气情况制定七天行程"
     )
 
-    with patch('src.plan.executor.async_input', new_callable=AsyncMock) as mock_default:
-        mock_default.return_value = "默认输入"
-        result = await execute_step(step, {}, MagicMock(), on_input=None)
+    with patch('src.plan.executor.call_model', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = ("七天行程安排如下...", {}, "stop")
+        result = await execute_step(step, {}, MagicMock())
 
-    assert result == "默认输入"
-    mock_default.assert_called_once()
+    assert result == "七天行程安排如下..."
+    # 验证 call_model 被调用，且 prompt 包含 subtask_prompt
+    call_args = mock_call.call_args[0][0]
+    user_content = call_args[1]["content"]
+    assert "根据天气情况制定七天行程" in user_content
 
 
 @pytest.mark.asyncio
-async def test_execute_step_subtask():
-    """测试执行子任务步骤"""
+async def test_execute_step_subtask_with_context():
+    """测试子任务使用前序步骤结果作为上下文"""
     step = Step(
-        id="step1",
-        description="处理子任务",
+        id="step2",
+        description="制定行程",
         action="subtask",
-        subtask_prompt="需要规划的任务"
+        subtask_prompt="根据天气制定行程"
     )
 
-    result = await execute_step(step, {}, MagicMock())
-    assert "子任务未实现" in result
-    assert "需要规划的任务" in result
+    context = {"step1": "北京天气：晴，25°C"}
+
+    with patch('src.plan.executor.call_model', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = ("行程已制定", {}, "stop")
+        result = await execute_step(step, context, MagicMock())
+
+    assert result == "行程已制定"
+    user_content = mock_call.call_args[0][0][1]["content"]
+    assert "北京天气：晴，25°C" in user_content
+
+
+@pytest.mark.asyncio
+async def test_execute_step_subtask_with_variable_in_prompt():
+    """测试子任务 prompt 中的变量引用被解析"""
+    step = Step(
+        id="step2",
+        description="处理结果",
+        action="subtask",
+        subtask_prompt="$step1"
+    )
+
+    context = {"step1": "前序步骤的实际结果"}
+
+    with patch('src.plan.executor.call_model', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = ("处理完成", {}, "stop")
+        await execute_step(step, context, MagicMock())
+
+    user_content = mock_call.call_args[0][0][1]["content"]
+    assert "前序步骤的实际结果" in user_content
+
+
+@pytest.mark.asyncio
+async def test_execute_step_subtask_timeout():
+    """测试子任务调用超时时正确抛出 StepExecutionError"""
+    step = Step(
+        id="step1",
+        description="慢子任务",
+        action="subtask",
+        subtask_prompt="需要很长时间的任务"
+    )
+
+    async def timeout_call(*args, **kwargs):
+        raise asyncio.TimeoutError()
+
+    with patch('src.plan.executor.call_model', side_effect=timeout_call):
+        with pytest.raises(StepExecutionError) as exc_info:
+            await execute_step(step, {}, MagicMock())
+        assert "超时" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_execute_step_subtask_no_prompt():
+    """测试子任务没有 subtask_prompt 时使用 description"""
+    step = Step(
+        id="step1",
+        description="制定行程草案",
+        action="subtask",
+        # 没有 subtask_prompt
+    )
+
+    with patch('src.plan.executor.call_model', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = ("行程内容", {}, "stop")
+        result = await execute_step(step, {}, MagicMock())
+
+    assert result == "行程内容"
+    user_content = mock_call.call_args[0][0][1]["content"]
+    assert "制定行程草案" in user_content
 
 
 def test_step_rejects_unknown_action():
@@ -252,14 +317,11 @@ async def test_execute_plan_with_user_input():
     mock_executor = AsyncMock()
     mock_executor.execute.return_value = "处理结果"
 
-    mock_input_func = AsyncMock()
-    mock_input_func.return_value = "用户提供的数据"
+    with patch('src.plan.executor.agent_input', new_callable=AsyncMock) as mock_input:
+        mock_input.return_value = "用户提供的数据"
+        result = await execute_plan(plan, mock_executor)
 
-    result = await execute_plan(
-        plan, mock_executor, on_input=mock_input_func
-    )
-
-    mock_input_func.assert_called_once_with("\n助手: 获取输入\n\n你: ")
+    mock_input.assert_called_once_with("\n助手: 获取输入\n\n你: ")
     mock_executor.execute.assert_called_once_with("process", {})
     assert result["step1"] == "用户提供的数据"
     assert result["step2"] == "处理结果"

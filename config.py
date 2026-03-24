@@ -10,7 +10,7 @@ load_dotenv()
 async_client = AsyncOpenAI(
     base_url=os.getenv("OPENAI_BASE_URL"),
     api_key=os.getenv("OPENAI_API_KEY"),
-    timeout=30.0,
+    timeout=120.0,
     max_retries=2,
 )
 
@@ -18,7 +18,7 @@ async_client = AsyncOpenAI(
 client = OpenAI(
     base_url=os.getenv("OPENAI_BASE_URL"),
     api_key=os.getenv("OPENAI_API_KEY"),
-    timeout=30.0,
+    timeout=120.0,
     max_retries=2,
 )
 
@@ -34,8 +34,7 @@ request_semaphore = asyncio.Semaphore(DEFAULT_CONCURRENCY)
 PLAN_MAX_ADJUSTMENTS = 3
 PLAN_MAX_CLARIFICATION_ROUNDS = 3
 PLAN_MAX_RAW_RESPONSE_LENGTH = 500
-PLAN_DEFAULT_TIMEOUT = 30.0
-PLAN_GENERATION_TIMEOUT = 60.0
+PLAN_DEFAULT_TIMEOUT = 120.0
 PLAN_MAX_VARIABLE_DEPTH = 10
 
 # 性能监控日志配置

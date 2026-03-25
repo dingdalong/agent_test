@@ -15,9 +15,10 @@ from src.memory.memory import ConversationBuffer, VectorMemory
 from src.flows import detect_flow
 from src.flows.planning import PlanningFlow
 from src.agents import agent_registry, MultiAgentFlow
-from config import USER_ID, MCP_CONFIG_PATH
+from config import USER_ID, MCP_CONFIG_PATH, SKILLS_DIRS
 from src.mcp.config import load_mcp_config
 from src.mcp.manager import MCPManager
+from src.skills import SkillManager
 
 input_guard = InputGuardrail()
 
@@ -54,7 +55,7 @@ async def is_complex_request(text: str) -> bool:
 
 
 async def handle_input(user_input: str, all_tools=None):
-    """统一入口：护栏 → Flow 路由 → 执行"""
+    """统一入口：护栏 → Skill 斜杠命令 → Flow 路由 → 执行"""
     effective_tools = all_tools or tools
 
     # 1. 护栏检查
@@ -63,7 +64,30 @@ async def handle_input(user_input: str, all_tools=None):
         await agent_output(f"\n[安全拦截] {reason}\n")
         return
 
-    # 2. 关键词触发的特殊 Flow（如 /book）
+    # 2. Skill 斜杠命令检测
+    skill_manager = getattr(tool_executor, "skill_manager", None)
+    if skill_manager:
+        skill_name = skill_manager.is_slash_command(user_input)
+        if skill_name:
+            skill_content = skill_manager.activate(skill_name)
+            if skill_content:
+                remaining = user_input[len(f"/{skill_name}"):].strip()
+                actual_input = remaining or f"已激活 {skill_name} skill，请按指令执行。"
+                multi_agent_flow = MultiAgentFlow(
+                    registry=agent_registry,
+                    memory=memory,
+                    user_facts=user_facts,
+                    conversation_summaries=conversation_summaries,
+                    all_tools=effective_tools,
+                    tool_executor=tool_executor,
+                )
+                multi_agent_flow.model.data["user_input"] = actual_input
+                multi_agent_flow.model.data["skill_content"] = skill_content
+                runner = FSMRunner(multi_agent_flow)
+                await runner.run()
+                return
+
+    # 3. 关键词触发的特殊 Flow（如 /book）
     flow = detect_flow(user_input, tool_executor=tool_executor)
     if flow:
         runner = FSMRunner(flow)
@@ -105,7 +129,12 @@ async def main():
     # 注入 MCP 到现有 tool_executor
     tool_executor.mcp_manager = mcp_manager
 
-    # 合并工具列表（本地 tools + MCP tools）
+    # 初始化 Skills
+    skill_manager = SkillManager(skill_dirs=SKILLS_DIRS)
+    await skill_manager.discover()
+    tool_executor.skill_manager = skill_manager
+
+    # 合并工具列表（本地 tools + MCP tools + Skill 工具）
     mcp_schemas = mcp_manager.get_tools_schemas()
     local_names = {t["function"]["name"] for t in tools}
     for schema in mcp_schemas:
@@ -114,9 +143,17 @@ async def main():
             print(f"[警告] MCP 工具 '{mcp_name}' 与本地工具同名，可能产生冲突")
     all_tools = tools + mcp_schemas
 
+    # 添加 activate_skill 工具
+    activate_schema = skill_manager.build_activate_tool_schema()
+    if activate_schema:
+        all_tools.append(activate_schema)
+
+    skill_count = len(skill_manager._skills)
     print("Agent 已启动，输入 'exit' 退出。")
     if mcp_schemas:
         print(f"已加载 {len(mcp_schemas)} 个 MCP 工具")
+    if skill_count:
+        print(f"已发现 {skill_count} 个 Skill")
 
     try:
         while True:

@@ -69,3 +69,30 @@ def test_convert_result_truncation():
     result = mgr._convert_result(MockResult())
     assert result.endswith("...(结果已截断)")
     assert len(result) == 2000 + len("...(结果已截断)")
+
+
+from unittest.mock import AsyncMock
+from src.tools.tool_executor import ToolExecutor
+
+
+@pytest.mark.asyncio
+async def test_tool_executor_routes_mcp_tools():
+    """ToolExecutor routes mcp_-prefixed tools to mcp_manager."""
+    mock_mcp = AsyncMock()
+    mock_mcp.call_tool.return_value = "mcp result"
+
+    executor = ToolExecutor({}, mcp_manager=mock_mcp)
+    result = await executor.execute("mcp_filesystem_read_file", {"path": "/tmp/test"})
+
+    mock_mcp.call_tool.assert_called_once_with("mcp_filesystem_read_file", {"path": "/tmp/test"})
+    assert result == "mcp result"
+
+
+@pytest.mark.asyncio
+async def test_tool_executor_no_mcp_for_local_tools():
+    """Non-mcp_ tools go through normal local execution, not MCP."""
+    mock_mcp = AsyncMock()
+    executor = ToolExecutor({}, mcp_manager=mock_mcp)
+    result = await executor.execute("calculator", {})
+    mock_mcp.call_tool.assert_not_called()
+    assert "未知工具" in result

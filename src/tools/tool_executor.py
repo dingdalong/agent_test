@@ -5,11 +5,13 @@ from pydantic import ValidationError
 from src.core.io import agent_output, agent_input
 
 class ToolExecutor:
-    def __init__(self, registry: Dict[str, Dict[str, Any]]):
+    def __init__(self, registry: Dict[str, Dict[str, Any]], mcp_manager=None):
         """
-        registry: 工具注册表，格式为 {name: {"func": callable, "model": BaseModel, "sensitive": bool, ...}}
+        registry: 工具注册表
+        mcp_manager: MCPManager 实例，用于路由 MCP 工具调用
         """
         self.registry = registry
+        self.mcp_manager = mcp_manager
 
     def is_sensitive(self, tool_name: str) -> bool:
         """检查工具是否为敏感工具"""
@@ -22,6 +24,10 @@ class ToolExecutor:
         Args:
             skip_confirm: 为 True 时跳过敏感工具确认（用于已预先确认的场景）
         """
+        # MCP 工具路由
+        if tool_name.startswith("mcp_") and self.mcp_manager:
+            return await self.mcp_manager.call_tool(tool_name, arguments)
+
         if tool_name not in self.registry:
             return f"错误：未知工具 '{tool_name}'"
 

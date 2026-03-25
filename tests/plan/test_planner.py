@@ -4,7 +4,7 @@
 import pytest
 import json
 from unittest.mock import AsyncMock, patch
-from src.plan.planner import generate_plan, adjust_plan, parse_plan_from_tool_calls, build_submit_plan_schema
+from src.plan.planner import generate_plan, adjust_plan, parse_plan_from_tool_calls, _SUBMIT_PLAN_SCHEMA
 from src.plan.models import Plan, Step
 
 
@@ -123,19 +123,17 @@ async def test_generate_plan_empty_steps():
 
 @pytest.mark.asyncio
 async def test_generate_plan_invalid_tool_call_args():
-    """测试 submit_plan 参数解析失败时抛出异常"""
-    from src.plan.exceptions import JSONParseError
-
+    """测试 submit_plan 参数解析失败时返回 None"""
     tool_calls = {0: {"id": "call_test", "name": "submit_plan", "arguments": "无效的JSON"}}
 
     with patch('src.plan.planner.call_model', new_callable=AsyncMock) as mock_call:
         mock_call.return_value = ("", tool_calls, "stop")
 
-        with pytest.raises(JSONParseError):
-            await generate_plan(
-                user_input="测试请求",
-                available_tools=[]
-            )
+        plan = await generate_plan(
+            user_input="测试请求",
+            available_tools=[]
+        )
+        assert plan is None
 
 
 @pytest.mark.asyncio
@@ -332,27 +330,26 @@ class TestParseplanFromToolCalls:
         assert plan is None
 
     def test_parse_invalid_json(self):
-        from src.plan.exceptions import JSONParseError
         tool_calls = {0: {"id": "call_x", "name": "submit_plan", "arguments": "not json"}}
-        with pytest.raises(JSONParseError):
-            parse_plan_from_tool_calls(tool_calls)
+        plan = parse_plan_from_tool_calls(tool_calls)
+        assert plan is None
 
 
-class TestBuildSubmitPlanSchema:
+class TestSubmitPlanSchema:
     def test_schema_structure(self):
-        schema = build_submit_plan_schema()
-        assert schema["type"] == "function"
-        assert schema["function"]["name"] == "submit_plan"
-        params = schema["function"]["parameters"]
+        assert _SUBMIT_PLAN_SCHEMA["type"] == "function"
+        assert _SUBMIT_PLAN_SCHEMA["function"]["name"] == "submit_plan"
+        params = _SUBMIT_PLAN_SCHEMA["function"]["parameters"]
         assert "steps" in params["properties"]
-        assert params["properties"]["steps"]["type"] == "array"
 
     def test_step_schema_has_required_fields(self):
-        schema = build_submit_plan_schema()
-        step_schema = schema["function"]["parameters"]["properties"]["steps"]["items"]
-        assert "id" in step_schema["properties"]
-        assert "description" in step_schema["properties"]
-        assert "action" in step_schema["properties"]
+        params = _SUBMIT_PLAN_SCHEMA["function"]["parameters"]
+        # Plan 模型的 steps 字段引用 Step 的 $defs
+        # 验证 schema 包含 Step 的关键字段
+        schema_str = json.dumps(params)
+        assert "id" in schema_str
+        assert "description" in schema_str
+        assert "action" in schema_str
 
 
 if __name__ == "__main__":

@@ -5,7 +5,6 @@ from openai import APIConnectionError, RateLimitError, APIError
 from config import async_client, MODEL_NAME, request_semaphore
 from .performance import async_time_function
 from .io import agent_output
-from src.utils.text import extract_json
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +14,6 @@ async def call_model(
     temperature: float = 1.0,
     tools: Optional[List[Dict]] = None,
     max_retries: int = 3,
-    response_format: Optional[Dict[str, str]] = None,
     silent: bool = False,
     **kwargs
 ) -> Tuple[str, Dict[int, Dict[str, str]], Optional[str]]:
@@ -40,12 +38,9 @@ async def call_model(
                     temperature=temperature,
                     tool_choice="auto" if tools else None,
                 )
-                if response_format:
-                    create_kwargs["response_format"] = response_format
                 response = await async_client.chat.completions.create(**create_kwargs)
 
-                is_json = response_format and response_format.get("type") == "json_object"
-                return await parse_stream_response(response, silent=silent, clean_json=is_json)
+                return await parse_stream_response(response, silent=silent)
 
             except (APIConnectionError, RateLimitError, asyncio.TimeoutError) as e:
                 if attempt == max_retries - 1:
@@ -60,7 +55,6 @@ async def call_model(
 async def parse_stream_response(
     stream,
     silent: bool = False,
-    clean_json: bool = False
 ) -> Tuple[str, Dict[int, Dict[str, str]], Optional[str]]:
     """
     异步迭代流式响应
@@ -99,6 +93,4 @@ async def parse_stream_response(
             finish_reason = chunk.choices[0].finish_reason
 
     content = "".join(content_parts)
-    if clean_json:
-        content = extract_json(content)
     return content, tool_calls, finish_reason

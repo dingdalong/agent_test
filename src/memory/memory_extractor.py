@@ -7,8 +7,10 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Set, Union
 
+from pydantic import BaseModel
 from src.core.async_api import call_model
 from src.core.performance import async_time_function
+from src.core.structured_output import build_output_schema, parse_output
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,26 @@ class ExtractorConfig:
 
     # 敏感信息检测正则（示例）
     SENSITIVE_PATTERNS = [re.compile(r'1[3-9]\d{9}')]  # 手机号
+
+
+# ---------- 虚拟工具输出模型 ----------
+
+class FactItem(BaseModel):
+    fact_text: str
+    confidence: float
+    type: str
+    is_plausible: Optional[bool] = None
+    speaker: str
+    attribute: str
+
+class FactsResult(BaseModel):
+    facts: List[FactItem]
+
+_SUBMIT_FACTS_TOOL = build_output_schema(
+    "submit_facts",
+    "提交从对话中提取的事实列表",
+    FactsResult
+)
 
 
 # ---------- 数据模型 ----------
@@ -121,38 +143,6 @@ class TypeValidator:
         return type_str in allowed_set
 
 
-# ---------- 备用解析器 ----------
-class FallbackParser:
-    """当模型输出非 JSON 时的补救措施"""
-    @staticmethod
-    def parse(text: str) -> List[Dict[str, Any]]:
-        text = text.strip()
-        if not text:
-            return []
-
-        # 尝试直接解析整个文本
-        try:
-            data = json.loads(text)
-            if isinstance(data, dict) and "facts" in data:
-                return data["facts"]
-            if isinstance(data, list):
-                return data
-        except json.JSONDecodeError:
-            pass
-
-        # 尝试提取数组
-        array_pattern = r'\[\s*\{.*\}\s*\]'
-        match = re.search(array_pattern, text, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group())
-            except:
-                pass
-
-        logger.warning(f"Fallback parsing failed for text (first 200 chars): {text[:200]}")
-        return []
-
-
 # ---------- 主要提取器类 ----------
 class FactExtractor:
     """
@@ -163,7 +153,6 @@ class FactExtractor:
         self.config = config or ExtractorConfig()
         self.type_validator = TypeValidator()
         self.text_utils = TextUtils()
-        self.fallback_parser = FallbackParser()
         self.target_types = self._determine_target_types(None)
         self.prompt = self._build_prompt(self.target_types)
 
@@ -178,13 +167,8 @@ class FactExtractor:
         执行提取流程，返回 Fact 对象列表
         """
 
-        # 调用模型
-        model_output = await self._call_model(user_input, assistant_response)
-        if not model_output:
-            return []
-
-        # 解析响应
-        facts_data = self._parse_model_output(model_output)
+        # 调用模型（返回已解析的 List[Dict]）
+        facts_data = await self._call_model(user_input, assistant_response)
         if not facts_data:
             return []
 
@@ -226,7 +210,7 @@ class FactExtractor:
    - is_plausible: true/false/null（常识合理性）
    - speaker: "user" 或 "assistant"（指信息由谁说出）
    - attribute: 字符串，表示该事实所属的具体属性。例如用户名字的 attribute 可以是 "user.name"；用户对茶的偏好可以是 "user.preference.drink.tea"。同一属性的不同值（如“小明”和“大明”）应使用相同的 attribute，以便后续更新。若事实无明确属性，可使用类型加关键词生成，如 "world.fact.capital"。
-4. 返回严格的 JSON 格式，外层是一个对象，包含 "facts" 数组。
+4. 请调用 submit_facts 工具提交提取结果。
 示例：
 {{
   "facts": [
@@ -255,36 +239,24 @@ class FactExtractor:
     @async_time_function()
     async def _call_model(self,
                     user_input: str,
-                    assistant_response: str) -> Optional[str]:
+                    assistant_response: str) -> Optional[List[Dict[str, Any]]]:
         try:
             prompt = [
-                {"role": "system", "content": self.prompt},  # 固定部分
-                {"role": "user", "content": f"用户说：{user_input}\n助手说：{assistant_response}"}  # 变化部分
+                {"role": "system", "content": self.prompt},
+                {"role": "user", "content": f"用户说：{user_input}\n助手说：{assistant_response}"}
             ]
-            response, tool_calls, finish_reason = await call_model(
+            _, tool_calls, _ = await call_model(
                 prompt, temperature=0.0,
-                response_format={"type": "json_object"},
+                tools=[_SUBMIT_FACTS_TOOL],
                 silent=True,
             )
-            if not response:
-                return None
-            return response
+            result = parse_output(tool_calls, "submit_facts", FactsResult)
+            if result:
+                return [item.model_dump() for item in result.facts]
+            return None
         except Exception as e:
             logger.error(f"Model call failed: {e}")
             return None
-
-    def _parse_model_output(self, text: str) -> List[Dict[str, Any]]:
-        try:
-            data = json.loads(text)
-            facts = data.get("facts", [])
-            if isinstance(facts, list):
-                return facts
-            else:
-                logger.warning("Parsed JSON does not contain a 'facts' list")
-                return []
-        except json.JSONDecodeError:
-            logger.info("JSON decode failed, attempting fallback parse")
-            return self.fallback_parser.parse(text)
 
     def _build_fact(self,
                     raw: Dict[str, Any],

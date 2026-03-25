@@ -1,41 +1,36 @@
 import json
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
 
+from pydantic import BaseModel
 from src.core.async_api import call_model
 from src.plan.models import Plan, Step
 from src.plan.exceptions import JSONParseError, APIGenerationError, PlanError
 from src.tools import ToolDict
+from src.core.structured_output import build_output_schema, parse_output
 
 logger = logging.getLogger(__name__)
 
 
-# === submit_plan 虚拟工具 schema ===
+# === submit_plan 虚拟工具 ===
 
-def build_submit_plan_schema() -> dict:
-    """构建 submit_plan 虚拟工具的 schema，让 LLM 通过 function calling 提交计划"""
-    step_schema = Step.model_json_schema()
-    return {
-        "type": "function",
-        "function": {
-            "name": "submit_plan",
-            "description": "提交执行计划。每个步骤的 tool_name 和 tool_args 必须与可用工具的参数完全匹配。如果请求是简单问答或闲聊，不要调用此工具。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "steps": {
-                        "type": "array",
-                        "description": "计划步骤列表",
-                        "items": step_schema
-                    }
-                },
-                "required": ["steps"]
-            }
-        }
-    }
+_SUBMIT_PLAN_SCHEMA = build_output_schema(
+    "submit_plan",
+    "提交执行计划。每个步骤的 tool_name 和 tool_args 必须与可用工具的参数完全匹配。如果请求是简单问答或闲聊，不要调用此工具。",
+    Plan
+)
 
 
-_SUBMIT_PLAN_SCHEMA = build_submit_plan_schema()
+# === classify_feedback 虚拟工具 ===
+
+class FeedbackClassification(BaseModel):
+    action: Literal["confirm", "adjust"]
+
+_CLASSIFY_FEEDBACK_TOOL = build_output_schema(
+    "classify_feedback",
+    "输出用户反馈的分类结果：confirm=确认执行, adjust=要求调整",
+    FeedbackClassification
+)
 
 
 def _build_plan_tools(available_tools: List[ToolDict]) -> list:
@@ -94,9 +89,9 @@ CONFIRM_CLASSIFICATION_PROMPT = """判断用户的回复是"确认执行计划"�
 
 用户回复：{user_feedback}
 
-请只输出一个JSON对象，格式为：{{"action": "confirm"}} 或 {{"action": "adjust"}}
-- 如果用户表示同意、确认、执行、没问题等意思，输出 confirm
-- 如果用户提出修改意见、补充要求、质疑等，输出 adjust"""
+请调用 classify_feedback 工具输出分类结果：
+- 如果用户表示同意、确认、执行、没问题等意思，action 为 confirm
+- 如果用户提出修改意见、补充要求、质疑等，action 为 adjust"""
 
 
 # === 解析函数 ===
@@ -104,39 +99,7 @@ CONFIRM_CLASSIFICATION_PROMPT = """判断用户的回复是"确认执行计划"�
 def parse_plan_from_tool_calls(tool_calls: Dict[int, Dict[str, str]]) -> Optional[Plan]:
     """从 tool_calls 中解析 submit_plan 调用，返回 Plan 对象。
     如果没有 submit_plan 调用，返回 None。"""
-    for _, tc in tool_calls.items():
-        if tc.get("name") == "submit_plan":
-            try:
-                data = json.loads(tc["arguments"])
-                steps = [Step(**s) for s in data.get("steps", [])]
-                return Plan(steps=steps)
-            except json.JSONDecodeError as e:
-                raise JSONParseError(
-                    f"submit_plan 参数 JSON 解析失败: {e}",
-                    raw_response=tc["arguments"]
-                ) from e
-            except Exception as e:
-                raise JSONParseError(
-                    f"submit_plan 参数解析失败: {e}",
-                    raw_response=tc["arguments"]
-                ) from e
-    return None
-
-
-def parse_plan_response(response: str) -> Plan:
-    """从纯文本 JSON 响应解析计划（兼容旧逻辑）"""
-    try:
-        data = json.loads(response)
-        steps = [Step(**s) for s in data.get("steps", [])]
-        return Plan(steps=steps)
-    except json.JSONDecodeError as e:
-        error_msg = f"JSON解析失败: {e}"
-        logger.error(f"{error_msg}, 原始响应: {response}")
-        raise JSONParseError(error_msg, raw_response=response) from e
-    except Exception as e:
-        error_msg = f"解析计划失败: {e}"
-        logger.error(f"{error_msg}, 原始响应: {response}")
-        raise JSONParseError(error_msg, raw_response=response) from e
+    return parse_output(tool_calls, "submit_plan", Plan)
 
 
 # === 核心功能 ===
@@ -151,15 +114,14 @@ async def classify_user_feedback(user_feedback: str, plan: Plan) -> str:
     )
 
     try:
-        response, _, _ = await call_model([
+        _, tool_calls, _ = await call_model([
             {"role": "user", "content": prompt}
         ], temperature=0,
-        response_format={"type": "json_object"},
+        tools=[_CLASSIFY_FEEDBACK_TOOL],
         silent=True)
-        data = json.loads(response)
-        action = data.get("action", "adjust")
-        if action in ("confirm", "adjust"):
-            return action
+        result = parse_output(tool_calls, "classify_feedback", FeedbackClassification)
+        if result and result.action in ("confirm", "adjust"):
+            return result.action
         return "adjust"
     except Exception as e:
         logger.warning(f"分类用户反馈失败: {e}, 默认为调整")

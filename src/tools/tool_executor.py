@@ -12,6 +12,7 @@ class ToolExecutor:
         """
         self.registry = registry
         self.mcp_manager = mcp_manager
+        self.skill_manager = None
 
     def is_sensitive(self, tool_name: str) -> bool:
         """检查工具是否为敏感工具"""
@@ -24,6 +25,11 @@ class ToolExecutor:
         Args:
             skip_confirm: 为 True 时跳过敏感工具确认（用于已预先确认的场景）
         """
+        # Skill 工具路由
+        if tool_name == "activate_skill" and self.skill_manager:
+            result = self.skill_manager.activate(arguments.get("name", ""))
+            return result if result else "未找到指定的 Skill"
+
         # MCP 工具路由
         if tool_name.startswith("mcp_") and self.mcp_manager:
             return await self.mcp_manager.call_tool(tool_name, arguments)

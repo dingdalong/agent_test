@@ -42,6 +42,9 @@ MULTI_AGENT_MAX_HANDOFFS = 3
 SPECIALIST_MAX_TOOL_ROUNDS = 3
 SPECIALIST_MAX_RESULT_LENGTH = 500
 
+# MCP 配置
+MCP_CONFIG_PATH = os.getenv("MCP_CONFIG_PATH", "mcp_servers.json")
+
 # 性能监控日志配置
 # 避免重复配置日志
 if not logging.getLogger().hasHandlers():

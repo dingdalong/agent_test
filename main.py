@@ -15,7 +15,9 @@ from src.memory.memory import ConversationBuffer, VectorMemory
 from src.flows import detect_flow
 from src.flows.planning import PlanningFlow
 from src.agents import agent_registry, MultiAgentFlow
-from config import USER_ID
+from config import USER_ID, MCP_CONFIG_PATH
+from src.mcp.config import load_mcp_config
+from src.mcp.manager import MCPManager
 
 input_guard = InputGuardrail()
 
@@ -51,8 +53,9 @@ async def is_complex_request(text: str) -> bool:
     return "yes" in content.lower()
 
 
-async def handle_input(user_input: str):
+async def handle_input(user_input: str, all_tools=None):
     """统一入口：护栏 → Flow 路由 → 执行"""
+    effective_tools = all_tools or tools
 
     # 1. 护栏检查
     passed, reason = input_guard.check(user_input)
@@ -70,7 +73,7 @@ async def handle_input(user_input: str):
     # 3. 复杂请求 → PlanningFlow
     if await is_complex_request(user_input):
         planning_flow = PlanningFlow(
-            available_tools=tools,
+            available_tools=effective_tools,
             tool_executor=tool_executor,
         )
         planning_flow.model.data["original_request"] = user_input
@@ -86,7 +89,7 @@ async def handle_input(user_input: str):
         memory=memory,
         user_facts=user_facts,
         conversation_summaries=conversation_summaries,
-        all_tools=tools,
+        all_tools=effective_tools,
         tool_executor=tool_executor,
     )
     multi_agent_flow.model.data["user_input"] = user_input
@@ -95,13 +98,29 @@ async def handle_input(user_input: str):
 
 
 async def main():
+    # 初始化 MCP
+    mcp_manager = MCPManager()
+    await mcp_manager.connect_all(load_mcp_config(MCP_CONFIG_PATH))
+
+    # 注入 MCP 到现有 tool_executor
+    tool_executor.mcp_manager = mcp_manager
+
+    # 合并工具列表（本地 tools + MCP tools）
+    all_tools = tools + mcp_manager.get_tools_schemas()
+
     print("Agent 已启动，输入 'exit' 退出。")
-    while True:
-        user_input = await agent_input("\n你: ")
-        if user_input.lower() in ["exit", "quit"]:
-            break
-        await handle_input(user_input)
-        await agent_output("\n")
+    if mcp_manager.get_tools_schemas():
+        print(f"已加载 {len(mcp_manager.get_tools_schemas())} 个 MCP 工具")
+
+    try:
+        while True:
+            user_input = await agent_input("\n你: ")
+            if user_input.lower() in ["exit", "quit"]:
+                break
+            await handle_input(user_input, all_tools)
+            await agent_output("\n")
+    finally:
+        await mcp_manager.disconnect_all()
 
 
 if __name__ == "__main__":

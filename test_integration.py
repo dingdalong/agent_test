@@ -66,29 +66,8 @@ class TestMainMemoryIntegration(unittest.TestCase):
         self.assertEqual(vector_memory_cls.call_args_list[0].kwargs["collection_name"], "user_facts_user_abc_123")
         self.assertEqual(vector_memory_cls.call_args_list[1].kwargs["collection_name"], "conversation_summaries_user_abc_123")
 
-    def test_run_agent_merges_fact_and_summary_context(self):
-        main_module, _, user_facts, conversation_summaries = self._load_main_with_stubs()
-        user_facts.search.return_value = [{"fact": "用户叫大龙"}]
-        conversation_summaries.search.return_value = [{"fact": "之前讨论过记忆系统"}]
-        user_facts.add_conversation = AsyncMock()
-
-        memory = Mock()
-        memory.get_messages_for_api.return_value = [{"role": "user", "content": "你好"}]
-        memory.should_compress.return_value = False
-
-        mock_call = AsyncMock(return_value=("最终回复", {}, "stop"))
-        main_module.call_model = mock_call
-        # Stub is_complex_request to return False so we skip planning
-        main_module.is_complex_request = AsyncMock(return_value=False)
-
-        response = asyncio.run(main_module.run_agent("你好", memory))
-
-        self.assertEqual(response, "最终回复")
-        sent_messages = mock_call.call_args.args[0]
-        system_content = sent_messages[0]["content"]
-        self.assertIn("用户叫大龙", system_content)
-        self.assertIn("之前讨论过记忆系统", system_content)
-        user_facts.add_conversation.assert_called_once_with("你好")
+    # test_run_agent_merges_fact_and_summary_context 已移除
+    # run_agent 已重构为 ChatFlow，相关测试见 tests/flows/test_chat.py
 
 
 if __name__ == "__main__":

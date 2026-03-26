@@ -59,10 +59,10 @@ async def validate_main_program():
         print("  ✅ main.py 导入成功")
 
         # 检查关键函数
-        if hasattr(main, 'run_agent') and asyncio.iscoroutinefunction(main.run_agent):
-            print("  ✅ run_agent 是异步函数")
+        if hasattr(main, 'handle_input') and asyncio.iscoroutinefunction(main.handle_input):
+            print("  ✅ handle_input 是异步函数")
         else:
-            print("  ❌ run_agent 不是异步函数")
+            print("  ❌ handle_input 不是异步函数")
             return False
 
         if hasattr(main, 'main') and asyncio.iscoroutinefunction(main.main):

@@ -4,7 +4,8 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock
 from pathlib import Path
 from src.skills import SkillManager
-from src.tools.tool_executor import ToolExecutor
+from src.tools.router import ToolRouter
+from src.skills.provider import SkillToolProvider
 
 
 def _make_skill(base, name, description="A skill.", body="## Do things"):
@@ -38,19 +39,16 @@ async def test_discover_activate_end_to_end(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_tool_executor_skill_routing(tmp_path):
-    """ToolExecutor correctly routes activate_skill to SkillManager."""
-    skills_dir = tmp_path / "skills"
-    skills_dir.mkdir()
-    _make_skill(skills_dir, "my-skill", "My skill.", "## Body")
-
-    mgr = SkillManager(skill_dirs=[str(skills_dir)])
+async def test_router_skill_routing(tmp_path):
+    """ToolRouter + SkillToolProvider 端到端路由"""
+    _make_skill(tmp_path, "test-skill", "A test skill.", "## Body\nContent here")
+    mgr = SkillManager(skill_dirs=[str(tmp_path)])
     await mgr.discover()
 
-    executor = ToolExecutor({})
-    executor.skill_manager = mgr
+    router = ToolRouter()
+    router.add_provider(SkillToolProvider(mgr))
 
-    result = await executor.execute("activate_skill", {"name": "my-skill"})
+    result = await router.route("activate_skill", {"name": "test-skill"})
     assert "skill_content" in result
     assert "## Body" in result
 

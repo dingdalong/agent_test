@@ -15,7 +15,7 @@ from src.core.performance import async_time_function
 from src.memory import ConversationBuffer, MemoryStore, MemoryType
 from src.tools import ToolDict
 from src.tools.tool_call import execute_tool_calls
-from src.tools.tool_executor import ToolExecutor
+from src.tools import ToolExecutor
 
 logger = logging.getLogger(__name__)
 

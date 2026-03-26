@@ -9,12 +9,34 @@ import pytest
 from src.flows.chat import ChatFlow
 from src.core.fsm import FSMRunner
 from src.memory import ConversationBuffer, MemoryStore
-from src.tools import tools, tool_executor
+from pathlib import Path
+from src.tools import (
+    get_registry, discover_tools,
+    ToolExecutor, ToolRouter, LocalToolProvider,
+    error_handler_middleware, truncate_middleware,
+)
 
 logger = logging.getLogger(__name__)
 
 # 所有性能测试默认跳过，运行方式: pytest -m slow
 pytestmark = [pytest.mark.slow, pytest.mark.asyncio]
+
+
+def _build_router() -> ToolRouter:
+    """构建工具路由器。"""
+    discover_tools("src.tools.builtin", Path("src/tools/builtin"))
+    registry = get_registry()
+    executor = ToolExecutor(registry)
+    local = LocalToolProvider(registry, executor, [
+        error_handler_middleware(),
+        truncate_middleware(2000),
+    ])
+    router = ToolRouter()
+    router.add_provider(local)
+    return router
+
+
+_router = _build_router()
 
 
 async def _run_chat(user_input: str, memory: ConversationBuffer,
@@ -23,8 +45,8 @@ async def _run_chat(user_input: str, memory: ConversationBuffer,
     chat_flow = ChatFlow(
         memory=memory,
         store=store,
-        tools_schema=tools,
-        tool_executor=tool_executor,
+        tools_schema=_router.get_all_schemas(),
+        tool_executor=_router,
     )
     chat_flow.model.data["user_input"] = user_input
     runner = FSMRunner(chat_flow)

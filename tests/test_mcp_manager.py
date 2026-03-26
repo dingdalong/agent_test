@@ -91,27 +91,26 @@ def test_convert_result_empty():
 
 
 from unittest.mock import AsyncMock
-from src.tools.tool_executor import ToolExecutor
+from src.mcp.provider import MCPToolProvider
 
 
 @pytest.mark.asyncio
-async def test_tool_executor_routes_mcp_tools():
-    """ToolExecutor routes mcp_-prefixed tools to mcp_manager."""
+async def test_mcp_provider_routes_mcp_tools():
+    """MCPToolProvider routes mcp_-prefixed tools to mcp_manager."""
     mock_mcp = AsyncMock()
     mock_mcp.call_tool.return_value = "mcp result"
 
-    executor = ToolExecutor({}, mcp_manager=mock_mcp)
-    result = await executor.execute("mcp_filesystem_read_file", {"path": "/tmp/test"})
+    provider = MCPToolProvider(mock_mcp)
+    assert provider.can_handle("mcp_filesystem_read_file")
+    result = await provider.execute("mcp_filesystem_read_file", {"path": "/tmp/test"})
 
     mock_mcp.call_tool.assert_called_once_with("mcp_filesystem_read_file", {"path": "/tmp/test"})
     assert result == "mcp result"
 
 
-@pytest.mark.asyncio
-async def test_tool_executor_no_mcp_for_local_tools():
-    """Non-mcp_ tools go through normal local execution, not MCP."""
+def test_mcp_provider_does_not_handle_local_tools():
+    """Non-mcp_ tools are not handled by MCPToolProvider."""
     mock_mcp = AsyncMock()
-    executor = ToolExecutor({}, mcp_manager=mock_mcp)
-    result = await executor.execute("calculator", {})
-    mock_mcp.call_tool.assert_not_called()
-    assert "未知工具" in result
+    provider = MCPToolProvider(mock_mcp)
+    assert not provider.can_handle("calculator")
+    assert not provider.can_handle("write_file")

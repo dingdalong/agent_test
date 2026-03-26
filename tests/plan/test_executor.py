@@ -102,12 +102,12 @@ async def test_execute_step_tool():
 
     context = {"context": {"value": "动态值"}}
     mock_executor = AsyncMock()
-    mock_executor.execute.return_value = "工具执行结果"
+    mock_executor.route.return_value = "工具执行结果"
 
     result = await execute_step(step, context, mock_executor)
 
     # 验证工具执行器被调用，参数已解析
-    mock_executor.execute.assert_called_once_with(
+    mock_executor.route.assert_called_once_with(
         "test_tool",
         {"param": "动态值", "literal": "text"}
     )
@@ -282,13 +282,13 @@ async def test_execute_plan_sequential():
     mock_executor = AsyncMock()
     mock_executor.is_sensitive = MagicMock(return_value=False)
     # 为不同工具返回不同结果
-    mock_executor.execute.side_effect = ["结果1", "结果2"]
+    mock_executor.route.side_effect = ["结果1", "结果2"]
 
     result, deferred = await execute_plan(plan, mock_executor)
 
     # 验证两个工具都被调用
-    assert mock_executor.execute.call_count == 2
-    calls = mock_executor.execute.call_args_list
+    assert mock_executor.route.call_count == 2
+    calls = mock_executor.route.call_args_list
     assert calls[0][0][0] == "tool1"
     assert calls[1][0][0] == "tool2"
 
@@ -318,14 +318,14 @@ async def test_execute_plan_with_user_input():
 
     mock_executor = AsyncMock()
     mock_executor.is_sensitive = MagicMock(return_value=False)
-    mock_executor.execute.return_value = "处理结果"
+    mock_executor.route.return_value = "处理结果"
 
     with patch('src.plan.executor.agent_input', new_callable=AsyncMock) as mock_input:
         mock_input.return_value = "用户提供的数据"
         result, deferred = await execute_plan(plan, mock_executor)
 
     mock_input.assert_called_once_with("\n助手: 获取输入\n\n你: ")
-    mock_executor.execute.assert_called_once_with("process", {})
+    mock_executor.route.assert_called_once_with("process", {})
     assert result["step1"] == "用户提供的数据"
     assert result["step2"] == "处理结果"
     assert deferred == []
@@ -355,12 +355,12 @@ async def test_execute_plan_variable_chaining():
 
     mock_executor = AsyncMock()
     mock_executor.is_sensitive = MagicMock(return_value=False)
-    mock_executor.execute.side_effect = ["结果1", "结果2"]
+    mock_executor.route.side_effect = ["结果1", "结果2"]
 
     result, deferred = await execute_plan(plan, mock_executor)
 
     # 第二步应该接收到第一步的结果作为参数
-    calls = mock_executor.execute.call_args_list
+    calls = mock_executor.route.call_args_list
     assert calls[1][0][0] == "tool2"
     # 参数应该是解析后的值
     assert calls[1][0][1] == {"input": "结果1"}
@@ -472,7 +472,7 @@ async def test_execute_plan_parallel():
 
     mock_executor = AsyncMock()
     mock_executor.is_sensitive = MagicMock(return_value=False)
-    mock_executor.execute.side_effect = mock_execute
+    mock_executor.route.side_effect = mock_execute
 
     result, deferred = await execute_plan(plan, mock_executor)
 
@@ -497,12 +497,12 @@ async def test_execute_plan_with_concurrency_limit():
 
     mock_executor = AsyncMock()
     mock_executor.is_sensitive = MagicMock(return_value=False)
-    mock_executor.execute.side_effect = ["r1", "r2", "r3"]
+    mock_executor.route.side_effect = ["r1", "r2", "r3"]
 
     result, deferred = await execute_plan(plan, mock_executor, max_concurrency=1)
 
     assert len(result) == 3
-    assert mock_executor.execute.call_count == 3
+    assert mock_executor.route.call_count == 3
     assert deferred == []
 
 
@@ -516,12 +516,12 @@ async def test_execute_step_timeout():
         tool_name="slow_tool"
     )
 
-    async def slow_execute(name, args):
+    async def slow_route(name, args):
         await asyncio.sleep(10)
         return "结果"
 
     mock_executor = AsyncMock()
-    mock_executor.execute.side_effect = slow_execute
+    mock_executor.route.side_effect = slow_route
 
     with pytest.raises(StepExecutionError) as exc_info:
         await execute_step(step, {}, mock_executor, timeout=0.01)
@@ -540,7 +540,7 @@ async def test_execute_step_no_timeout():
     )
 
     mock_executor = AsyncMock()
-    mock_executor.execute.return_value = "结果"
+    mock_executor.route.return_value = "结果"
 
     result = await execute_step(step, {}, mock_executor, timeout=0)
     assert result == "结果"

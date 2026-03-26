@@ -1,0 +1,220 @@
+"""AgentRunner — 驱动单个 Agent 完成任务的工具调用循环。"""
+
+from __future__ import annotations
+
+import json
+import logging
+import time
+from typing import Any
+
+from src.agents.agent import Agent, AgentResult, HandoffRequest
+from src.agents.context import RunContext, TraceEvent
+from src.agents.guardrails import run_guardrails
+from src.agents.registry import AgentRegistry
+from src.core.async_api import call_model
+from src.core.structured_output import build_output_schema, parse_output
+
+logger = logging.getLogger(__name__)
+
+HANDOFF_PREFIX = "transfer_to_"
+
+
+class AgentRunner:
+    """驱动单个 Agent 完成任务的循环。
+
+    职责边界：只负责一个 agent 的工具调用循环和 handoff 检测。
+    不关心图的拓扑 — 图引擎决定收到 HandoffRequest 后怎么做。
+    """
+
+    def __init__(
+        self,
+        registry: AgentRegistry,
+        max_tool_rounds: int = 10,
+        max_result_length: int = 4000,
+    ):
+        self.registry = registry
+        self.max_tool_rounds = max_tool_rounds
+        self.max_result_length = max_result_length
+
+    async def run(self, agent: Agent, context: RunContext) -> AgentResult:
+        """执行 agent，返回 AgentResult。"""
+        hooks = agent.hooks
+
+        # 1. hooks.on_start
+        if hooks:
+            await hooks.on_start(agent, context)
+
+        # 2. input guardrails
+        block = await run_guardrails(agent.input_guardrails, context, context.input)
+        if block:
+            return AgentResult(text=block.message)
+
+        # 3. 构建 instructions
+        if callable(agent.instructions):
+            system_prompt = agent.instructions(context)
+        else:
+            system_prompt = agent.instructions
+
+        # 4. 构建 messages
+        task = context.input
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": task},
+        ]
+
+        # 5. 构建工具列表
+        tools = self._build_tools(agent, context)
+        handoff_tools = self._build_handoff_tools(agent)
+        all_tools = tools + handoff_tools
+        if not all_tools:
+            all_tools = None
+
+        # 6. 工具调用循环
+        final_text = ""
+        for round_idx in range(self.max_tool_rounds):
+            content, tool_calls, _ = await call_model(
+                messages,
+                tools=all_tools,
+                silent=True,
+            )
+
+            if not tool_calls:
+                final_text = content
+                break
+
+            # 检查是否有 handoff 调用
+            for tc in tool_calls.values():
+                tc_name = tc.get("name", "")
+                if tc_name.startswith(HANDOFF_PREFIX):
+                    target_name = tc_name[len(HANDOFF_PREFIX):]
+                    try:
+                        args = json.loads(tc["arguments"])
+                    except json.JSONDecodeError:
+                        args = {}
+                    handoff = HandoffRequest(
+                        target=target_name,
+                        task=args.get("task", context.input),
+                    )
+                    context.trace.append(TraceEvent(
+                        node=agent.name,
+                        event="handoff",
+                        timestamp=time.time(),
+                        data={"target": target_name, "task": handoff.task},
+                    ))
+                    if hooks:
+                        await hooks.on_handoff(agent, context, handoff)
+                    return AgentResult(text=content or "", handoff=handoff)
+
+            # 普通工具调用
+            assistant_msg: dict[str, Any] = {
+                "role": "assistant",
+                "content": content if content else None,
+                "tool_calls": [
+                    {
+                        "id": tc["id"],
+                        "type": "function",
+                        "function": {"name": tc["name"], "arguments": tc["arguments"]},
+                    }
+                    for tc in tool_calls.values()
+                ],
+            }
+            messages.append(assistant_msg)
+
+            for tc in tool_calls.values():
+                tool_name = tc["name"]
+                try:
+                    args = json.loads(tc["arguments"])
+                except json.JSONDecodeError:
+                    args = {}
+
+                context.trace.append(TraceEvent(
+                    node=agent.name,
+                    event="tool_call",
+                    timestamp=time.time(),
+                    data={"tool": tool_name, "args": args},
+                ))
+                if hooks:
+                    await hooks.on_tool_call(agent, context, tool_name, args)
+
+                tool_router = getattr(context.deps, "tool_router", None)
+                if tool_router:
+                    result_text = await tool_router.route(tool_name, args)
+                else:
+                    result_text = "Error: no tool_router in deps"
+
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": str(result_text),
+                })
+        else:
+            # 超过 max_tool_rounds
+            content, _, _ = await call_model(messages, silent=True)
+            final_text = content
+
+        # 截断
+        if len(final_text) > self.max_result_length:
+            final_text = final_text[: self.max_result_length] + "...(已截断)"
+
+        # 7. output guardrails
+        block = await run_guardrails(agent.output_guardrails, context, final_text)
+        if block:
+            final_text = block.message
+
+        # 8. 结构化输出
+        structured_data: dict = {}
+        if agent.output_model is not None:
+            output_schema = build_output_schema(
+                "agent_output",
+                f"将结果整理为 {agent.output_model.__name__} 结构",
+                agent.output_model,
+            )
+            _, struct_calls, _ = await call_model(
+                messages + [{"role": "user", "content": "请将结果整理为结构化数据。"}],
+                tools=[output_schema],
+                silent=True,
+            )
+            parsed = parse_output(struct_calls, "agent_output", agent.output_model)
+            if parsed is not None:
+                structured_data = parsed.model_dump()
+
+        result = AgentResult(text=final_text, data=structured_data)
+
+        # 9. hooks.on_end
+        if hooks:
+            await hooks.on_end(agent, context, result)
+
+        return result
+
+    def _build_tools(self, agent: Agent, context: RunContext) -> list[dict]:
+        """从 deps.tool_router 过滤 agent 允许的工具。"""
+        tool_router = getattr(context.deps, "tool_router", None)
+        if not tool_router or not agent.tools:
+            return []
+        all_schemas = tool_router.get_all_schemas()
+        return [s for s in all_schemas if s["function"]["name"] in agent.tools]
+
+    def _build_handoff_tools(self, agent: Agent) -> list[dict]:
+        """为 agent.handoffs 生成 transfer_to_<name> 工具。"""
+        tools = []
+        for target_name in agent.handoffs:
+            target = self.registry.get(target_name)
+            description = target.description if target else target_name
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": f"{HANDOFF_PREFIX}{target_name}",
+                    "description": f"将任务交接给 {target_name}: {description}",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "task": {
+                                "type": "string",
+                                "description": "交接给目标 agent 的任务描述",
+                            }
+                        },
+                        "required": ["task"],
+                    },
+                },
+            })
+        return tools

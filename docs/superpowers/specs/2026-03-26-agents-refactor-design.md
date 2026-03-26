@@ -132,18 +132,24 @@ class HandoffRequest:
     task: str       # 传递的任务描述
 ```
 
-### 4.3 RunContext — 运行时上下文
+### 4.3 RunContext — 运行时上下文（泛型类型安全）
 
 ```python
+StateT = TypeVar("StateT", bound=BaseModel)
+
 @dataclass
-class RunContext:
-    """贯穿整个图执行的共享上下文。"""
+class RunContext(Generic[StateT]):
+    """贯穿整个图执行的共享上下文。
+
+    StateT 是用户定义的 Pydantic Model，约束共享状态的结构。
+    用法：RunContext[MyState]，IDE 自动补全 context.state.xxx。
+    """
 
     # 输入
     input: str
 
-    # 共享状态 — 节点间传递数据的唯一通道
-    state: dict[str, Any] = field(default_factory=dict)
+    # 共享状态 — 类型安全，由 StateT 约束
+    state: StateT
 
     # 基础设施引用
     tool_router: ToolRouter | None = None
@@ -156,6 +162,40 @@ class RunContext:
     # 当前执行信息
     current_agent: str = ""
     depth: int = 0                  # handoff 深度
+```
+
+使用示例：
+
+```python
+# 1. 定义状态结构
+class AgentState(BaseModel):
+    weather: WeatherResult | None = None
+    calendar: CalendarResult | None = None
+    final_response: str = ""
+
+# 2. 创建类型安全的 context
+context = RunContext[AgentState](
+    input=user_input,
+    state=AgentState(),
+    tool_router=router,
+)
+
+# 3. 节点中使用 — IDE 自动补全，拼错直接报红
+context.state.weather          # ✅ WeatherResult | None
+context.state.weather.temp_c   # ✅ float
+context.state.weathr           # ❌ IDE 立即报错
+```
+
+对于不需要类型安全的简单场景，提供默认的 `DictState`：
+
+```python
+class DictState(BaseModel):
+    """默认的宽松状态，允许任意 key-value。"""
+    model_config = ConfigDict(extra="allow")
+
+# 简单用法 — 和 dict 一样灵活，但仍是 BaseModel
+context = RunContext[DictState](input="...", state=DictState())
+context.state.weather = result  # 动态属性，extra="allow"
 ```
 
 ### 4.4 TraceEvent — 可观测性
@@ -338,7 +378,7 @@ class GraphEngine:
         self.registry = registry
         self.hooks = hooks
 
-    async def run(self, graph: CompiledGraph, context: RunContext) -> GraphResult:
+    async def run(self, graph: CompiledGraph, context: RunContext[StateT]) -> GraphResult[StateT]:
         """执行编译后的图。
 
         算法：
@@ -375,10 +415,10 @@ AgentNode 内部的 `HandoffRequest` 被图引擎拦截后：
 
 ```python
 @dataclass
-class GraphResult:
+class GraphResult(Generic[StateT]):
     """图执行的最终结果。"""
     output: Any                          # 最后一个节点的输出
-    state: dict[str, Any]                # 完整的共享状态快照
+    state: StateT                        # 完整的共享状态（类型安全）
     trace: list[TraceEvent]              # 完整的执行追踪
 ```
 

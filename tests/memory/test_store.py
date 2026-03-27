@@ -15,16 +15,16 @@ from src.memory.chroma.store import ChromaMemoryStore
 
 
 def _make_store(mock_collection):
-    """Create a MemoryStore with mocked dependencies (for init error tests)."""
-    with patch("src.memory.store.chromadb.PersistentClient") as mock_client, \
-         patch("src.memory.store.EmbeddingClient"), \
-         patch("src.memory.store.FactExtractor"), \
-         patch("src.memory.store.os.getenv", side_effect=lambda k, d=None: {
-             "OPENAI_MODEL_EMBEDDING": "test-model",
-             "OPENAI_MODEL_EMBEDDING_URL": "http://test",
-         }.get(k, d)):
+    """Create a MemoryStore with mocked dependencies."""
+    with patch("src.memory.chroma.store.chromadb.PersistentClient") as mock_client, \
+         patch("src.memory.chroma.store.EmbeddingClient"), \
+         patch("src.memory.chroma.store.FactExtractor"):
         mock_client.return_value.get_or_create_collection.return_value = mock_collection
-        store = MemoryStore(collection_name="test_memories")
+        store = MemoryStore(
+            embedding_model="test-model",
+            embedding_url="http://test",
+            collection_name="test_memories",
+        )
     return store
 
 
@@ -32,13 +32,13 @@ def _make_chroma_store(mock_collection):
     """Create a ChromaMemoryStore with mocked dependencies."""
     with patch("src.memory.chroma.store.chromadb.PersistentClient") as mock_client, \
          patch("src.memory.chroma.store.EmbeddingClient"), \
-         patch("src.memory.chroma.store.FactExtractor"), \
-         patch("src.memory.chroma.store.os.getenv", side_effect=lambda k, d=None: {
-             "OPENAI_MODEL_EMBEDDING": "test-model",
-             "OPENAI_MODEL_EMBEDDING_URL": "http://test",
-         }.get(k, d)):
+         patch("src.memory.chroma.store.FactExtractor"):
         mock_client.return_value.get_or_create_collection.return_value = mock_collection
-        store = ChromaMemoryStore(collection_name="test_memories")
+        store = ChromaMemoryStore(
+            embedding_model="test-model",
+            embedding_url="http://test",
+            collection_name="test_memories",
+        )
     return store
 
 
@@ -438,12 +438,11 @@ class TestMemoryStoreAddFromConversation:
 
 
 class TestMemoryStoreInit:
-    """Test MemoryStore initialization."""
+    """Test MemoryStore initialization (alias for ChromaMemoryStore)."""
 
-    def test_missing_env_raises(self):
-        with patch("src.memory.store.os.getenv", return_value=None):
-            with pytest.raises(ValueError, match="OPENAI_MODEL_EMBEDDING"):
-                MemoryStore()
+    def test_memory_store_is_chroma_alias(self):
+        """MemoryStore is a re-export of ChromaMemoryStore."""
+        assert MemoryStore is ChromaMemoryStore
 
 
 # === ChromaMemoryStore tests ===
@@ -517,10 +516,21 @@ class TestChromaMemoryStoreSearch:
 class TestChromaMemoryStoreInit:
     """Test ChromaMemoryStore initialization."""
 
-    def test_missing_env_raises(self):
-        with patch("src.memory.chroma.store.os.getenv", return_value=None):
-            with pytest.raises(ValueError, match="OPENAI_MODEL_EMBEDDING"):
-                ChromaMemoryStore()
+    def test_requires_embedding_model(self):
+        """Constructor requires embedding_model and embedding_url."""
+        with pytest.raises(TypeError):
+            ChromaMemoryStore()  # type: ignore[call-arg]
+
+    def test_accepts_explicit_params(self, mock_chroma_collection):
+        with patch("src.memory.chroma.store.chromadb.PersistentClient") as mock_client, \
+             patch("src.memory.chroma.store.EmbeddingClient") as mock_emb, \
+             patch("src.memory.chroma.store.FactExtractor"):
+            mock_client.return_value.get_or_create_collection.return_value = mock_chroma_collection
+            store = ChromaMemoryStore(
+                embedding_model="my-model",
+                embedding_url="http://embed",
+            )
+            mock_emb.assert_called_once_with("my-model", "http://embed")
 
 
 # === Collection name tests ===

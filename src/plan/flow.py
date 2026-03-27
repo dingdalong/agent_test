@@ -84,6 +84,7 @@ class PlanFlow:
             input=user_input,
             state=DictState(),
             deps=AgentDeps(
+                llm=self.llm,
                 tool_router=self.tool_router,
                 agent_registry=self.agent_registry,
                 graph_engine=self.engine,

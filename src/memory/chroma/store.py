@@ -4,11 +4,12 @@
 版本控制、序列化逻辑内联。
 """
 
+from __future__ import annotations
+
 import logging
-import os
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import chromadb
 from chromadb.config import Settings
@@ -20,6 +21,9 @@ from ..extractor import FactExtractor
 from ..types import MemoryRecord, MemoryType
 from .embeddings import EmbeddingClient
 
+if TYPE_CHECKING:
+    from src.llm.base import LLMProvider
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,17 +32,15 @@ class ChromaMemoryStore:
 
     def __init__(
         self,
+        embedding_model: str,
+        embedding_url: str,
         collection_name: str = "memories",
         persist_dir: str = "./chroma_data",
         distance_threshold: float = 1.1,
+        llm: LLMProvider | None = None,
     ):
-        embedding_model = os.getenv("OPENAI_MODEL_EMBEDDING")
-        embedding_url = os.getenv("OPENAI_MODEL_EMBEDDING_URL")
-        if not embedding_model or not embedding_url:
-            raise ValueError("OPENAI_MODEL_EMBEDDING and OPENAI_MODEL_EMBEDDING_URL must be set")
-
         self._embedding = EmbeddingClient(embedding_model, embedding_url)
-        self._extractor = FactExtractor()
+        self._extractor = FactExtractor(llm=llm)
         self._threshold = distance_threshold
 
         self._client = chromadb.PersistentClient(

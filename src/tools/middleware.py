@@ -25,8 +25,8 @@ def build_pipeline(execute_fn: NextFn, middlewares: list[Middleware]) -> NextFn:
     return pipeline
 
 
-def sensitive_confirm_middleware(registry: ToolRegistry) -> Middleware:
-    """敏感工具执行前需要用户确认"""
+def sensitive_confirm_middleware(registry: ToolRegistry, ui) -> Middleware:
+    """敏感工具执行前需要用户确认。ui 为 UserInterface 实例。"""
 
     async def middleware(name: str, args: dict, next_fn: NextFn) -> str:
         entry = registry.get(name)
@@ -39,11 +39,9 @@ def sensitive_confirm_middleware(registry: ToolRegistry) -> Middleware:
             else:
                 msg = f"执行敏感操作: {name}"
 
-            from src.core.io import agent_output, agent_input
-
-            await agent_output(f"\n⚠️  是否允许{msg}？\n")
-            confirm = await agent_input("(y/n): ")
-            if confirm.strip().lower() != "y":
+            await ui.display(f"\n⚠️  是否允许{msg}？\n")
+            confirmed = await ui.confirm("")
+            if not confirmed:
                 return "用户取消了操作"
 
         return await next_fn(name, args)

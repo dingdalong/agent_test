@@ -45,7 +45,7 @@ class AgentApp:
         executor = ToolExecutor(registry)
         middlewares = [
             error_handler_middleware(),
-            sensitive_confirm_middleware(registry),
+            sensitive_confirm_middleware(registry, self.ui),
             truncate_middleware(2000),
         ]
         local_provider = LocalToolProvider(registry, executor, middlewares)

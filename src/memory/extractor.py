@@ -143,7 +143,15 @@ class TypeValidator:
 
 
 class FactExtractor:
-    """从对话中提取结构化记忆事实。"""
+    """从对话中提取结构化记忆事实。
+
+    提取策略：
+    1. 通过 LLM + submit_facts 工具调用，强制输出结构化 JSON
+    2. 支持 5 大类约 25 种事实类型（user, assistant, world, conversation, interaction）
+    3. 置信度调整：检测模糊词（"可能""也许"）降低、强确定词（"肯定""一定"）提高
+    4. 多重过滤：敏感信息、不合理事实（is_plausible=False）、低置信度、无 attribute
+    5. include_types 参数可限制只提取特定类型的事实
+    """
 
     def __init__(
         self,

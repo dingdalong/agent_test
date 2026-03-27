@@ -6,7 +6,16 @@ from src.memory.types import MemoryRecord, MemoryType
 
 
 class MemoryProvider(Protocol):
-    """所有记忆存储实现必须满足的协议。"""
+    """记忆存储的抽象接口。
+
+    提供记忆的增删改查能力。实现者需要处理向量化存储和语义检索。
+    当前实现：ChromaMemoryStore（src/memory/chroma/store.py）。
+
+    使用方式：
+        store = ChromaMemoryStore(...)
+        record_id = store.add(record)
+        results = store.search("用户喜欢什么", n=5)
+    """
 
     def add(self, record: MemoryRecord) -> str: ...
     def search(

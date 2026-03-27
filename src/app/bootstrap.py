@@ -30,7 +30,18 @@ from src.app.app import AgentApp
 
 
 async def create_app(config_path: str = "config.yaml") -> AgentApp:
-    """读配置 → 创建所有组件 → 注入依赖 → 返回 AgentApp。"""
+    """应用组装入口 — 整个框架唯一的具体实现实例化点。
+
+    组装流程：
+    1. 加载 config.yaml + .env
+    2. 创建 LLM provider（OpenAIProvider）
+    3. 发现并注册本地工具，构建中间件管道
+    4. 连接 MCP 服务器，注册外部工具
+    5. 发现技能
+    6. 注册预设智能体，构建默认图
+    7. 组装 AgentDeps 依赖容器
+    8. 返回 AgentApp 实例
+    """
     raw = load_config(config_path)
     llm_cfg = raw.get("llm", {})
     ui = CLIInterface()

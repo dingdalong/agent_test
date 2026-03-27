@@ -13,7 +13,14 @@ logger = logging.getLogger(__name__)
 
 @runtime_checkable
 class ToolProvider(Protocol):
-    """所有工具来源的统一接口"""
+    """工具来源的统一接口。
+
+    ToolRouter 通过此协议查询和执行工具。每个 provider 管理一组工具，
+    通过 can_handle 判断是否能处理某个工具名，通过 get_schemas 暴露
+    工具的 JSON Schema 供 LLM 选择。
+
+    实现者：LocalToolProvider（本地 @tool）、MCPToolProvider（MCP）、SkillToolProvider（技能）。
+    """
 
     def can_handle(self, tool_name: str) -> bool: ...
     async def execute(self, tool_name: str, arguments: dict) -> str: ...

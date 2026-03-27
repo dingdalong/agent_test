@@ -102,7 +102,15 @@ def _topological_sort_layered(steps: list[Step]) -> list[list[Step]]:
 
 
 class PlanCompiler:
-    """将 Plan 编译为 CompiledGraph。"""
+    """将 Plan 编译为 CompiledGraph。
+
+    编译流程：
+    1. 验证：检查 Step ID 唯一性、agent 存在性
+    2. 分层拓扑排序：同层步骤无互相依赖，可并行执行
+    3. 每个 Step 生成 FunctionNode 闭包（工具调用或智能体调用）
+    4. 单步骤层 → 顺序 Edge；多步骤层 → ParallelGroup + merge 节点
+    5. 支持 $step_id.field 变量引用，运行时从 context.state 解析
+    """
 
     def __init__(self, agent_registry: AgentRegistry, tool_router: ToolRouter):
         self._registry = agent_registry

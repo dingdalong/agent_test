@@ -27,7 +27,16 @@ class GraphResult(Generic[StateT]):
 
 
 class GraphEngine:
-    """异步图执行器。Agent 无关 — 只负责图的遍历和执行。"""
+    """异步图执行器 — 与智能体无关的通用图遍历引擎。
+
+    执行模型：
+    1. 维护 pending 节点列表，从 entry 开始
+    2. 检查 pending 是否匹配 ParallelGroup → asyncio.gather 并行执行
+    3. 否则顺序执行单节点
+    4. 每个节点的 output 写入 context.state（可通过 $node_name 引用）
+    5. 根据 NodeResult 的 handoff / next / edges 决定下一步
+    6. max_handoff_depth 防止无限循环
+    """
 
     def __init__(
         self,

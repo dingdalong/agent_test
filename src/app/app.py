@@ -15,7 +15,15 @@ from src.app.presets import build_skill_graph
 
 
 class AgentApp:
-    """应用核心：消息路由 + REPL。组件由 bootstrap 注入。"""
+    """应用核心 — 消息路由 + REPL 循环。
+
+    所有组件由 bootstrap.py 注入，AgentApp 不创建任何具体实现。
+    消息路由逻辑：
+    - 所有输入先经过 InputGuardrail 安全检查
+    - /plan 命令 → PlanFlow 多步骤规划执行
+    - /skill-name → SkillManager 激活技能，构建独立图执行
+    - 普通消息 → 默认图（orchestrator → 专家智能体）
+    """
 
     def __init__(
         self,

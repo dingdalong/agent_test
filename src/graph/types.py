@@ -16,7 +16,15 @@ class NodeResult:
 
 @runtime_checkable
 class GraphNode(Protocol):
-    """图节点协议。"""
+    """图节点协议 — 所有可在 GraphEngine 中执行的节点必须实现此接口。
+
+    实现者通过 execute() 接收 RunContext，返回 NodeResult 控制执行流：
+    - output: 节点计算结果，写入 context.state
+    - next: 显式指定下一个节点（覆盖边路由）
+    - handoff: 请求切换到另一个智能体
+
+    实现者：AgentNode（智能体）、FunctionNode（普通函数）。
+    """
     name: str
 
     async def execute(self, context: Any) -> NodeResult: ...

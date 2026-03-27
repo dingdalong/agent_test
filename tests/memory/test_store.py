@@ -431,92 +431,19 @@ class TestMemoryStoreInit:
                 MemoryStore()
 
 
-# === Collection name tests (from root test_integration.py) ===
-
-
-def _load_main_for_collection_test(user_id="User 42"):
-    """Load main module with stubs to test _build_collection_name."""
-    import importlib
-    import sys
-    import types as _types
-    from unittest.mock import Mock, AsyncMock as _AsyncMock
-
-    sys.modules.pop("main", None)
-    memory_store_instance = Mock()
-    memory_store_cls = Mock(return_value=memory_store_instance)
-    conversation_buffer_cls = Mock()
-    memory_namespace = _types.SimpleNamespace(
-        ConversationBuffer=conversation_buffer_cls,
-        MemoryStore=memory_store_cls,
-    )
-    stub_modules = {
-        "src.tools": _types.SimpleNamespace(
-            get_registry=Mock(return_value=Mock()), discover_tools=Mock(),
-            ToolExecutor=Mock(), ToolRouter=Mock(), LocalToolProvider=Mock(),
-            sensitive_confirm_middleware=Mock(), truncate_middleware=Mock(),
-            error_handler_middleware=Mock(),
-        ),
-        "src.mcp.provider": _types.SimpleNamespace(MCPToolProvider=Mock()),
-        "src.skills.provider": _types.SimpleNamespace(SkillToolProvider=Mock()),
-        "src.core.io": _types.SimpleNamespace(
-            agent_input=_AsyncMock(return_value=""), agent_output=_AsyncMock(),
-        ),
-        "src.core.guardrails": _types.SimpleNamespace(
-            InputGuardrail=Mock(return_value=Mock(check=Mock(return_value=(True, "")))),
-        ),
-        "src.memory": memory_namespace,
-        "src.memory.buffer": _types.SimpleNamespace(
-            ConversationBuffer=conversation_buffer_cls, summarize_conversation=Mock(),
-        ),
-        "src.memory.store": _types.SimpleNamespace(MemoryStore=memory_store_cls),
-        "src.agents": _types.SimpleNamespace(
-            Agent=Mock(),
-            AgentRegistry=Mock(return_value=Mock()),
-            GraphBuilder=Mock(return_value=Mock(
-                add_agent=Mock(return_value=Mock(
-                    add_function=Mock(return_value=Mock(
-                        set_entry=Mock(return_value=Mock(
-                            compile=Mock(return_value=Mock()),
-                        )),
-                    )),
-                )),
-            )),
-            GraphEngine=Mock(),
-            RunContext=Mock(),
-            DictState=Mock(),
-            NodeResult=Mock(),
-        ),
-        "src.plan": _types.SimpleNamespace(
-            generate_plan=_AsyncMock(),
-            adjust_plan=_AsyncMock(),
-            classify_user_feedback=_AsyncMock(),
-            check_clarification_needed=_AsyncMock(),
-            PlanCompiler=Mock(),
-        ),
-        "config": _types.SimpleNamespace(
-            USER_ID=user_id, MCP_CONFIG_PATH="mcp_servers.json", SKILLS_DIRS=["skills/"],
-            PLAN_MAX_CLARIFICATION_ROUNDS=3, PLAN_MAX_ADJUSTMENTS=3,
-        ),
-        "src.mcp.config": _types.SimpleNamespace(load_mcp_config=Mock(return_value={})),
-        "src.mcp.manager": _types.SimpleNamespace(MCPManager=Mock()),
-        "src.skills": _types.SimpleNamespace(SkillManager=Mock()),
-    }
-    original_modules = {name: sys.modules.get(name) for name in stub_modules}
-    sys.modules.update(stub_modules)
-    try:
-        main_module = importlib.import_module("main")
-    finally:
-        for name, original in original_modules.items():
-            if original is None:
-                sys.modules.pop(name, None)
-            else:
-                sys.modules[name] = original
-    return main_module, memory_store_cls
+# === Collection name tests ===
 
 
 class TestBuildCollectionName:
 
     def test_collection_name_includes_sanitized_user_id(self):
-        main_module, memory_store_cls = _load_main_for_collection_test(user_id="User/ABC 123")
-        assert main_module._build_collection_name("user_facts", "User/ABC 123") == "user_facts_user_abc_123"
-        assert memory_store_cls.call_args.kwargs["collection_name"] == "memories_user_abc_123"
+        from src.memory.utils import build_collection_name
+        assert build_collection_name("user_facts", "User/ABC 123") == "user_facts_user_abc_123"
+
+    def test_collection_name_no_user_id(self):
+        from src.memory.utils import build_collection_name
+        assert build_collection_name("memories", None) == "memories"
+
+    def test_collection_name_empty_user_id(self):
+        from src.memory.utils import build_collection_name
+        assert build_collection_name("memories", "") == "memories"

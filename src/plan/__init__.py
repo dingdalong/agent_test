@@ -9,6 +9,7 @@ from src.plan.planner import (
 )
 from src.plan.compiler import PlanCompiler, resolve_variables
 from src.plan.exceptions import PlanError, JSONParseError, APIGenerationError, CompileError
+from src.plan.flow import PlanFlow
 
 __all__ = [
     "Plan",
@@ -23,4 +24,5 @@ __all__ = [
     "JSONParseError",
     "APIGenerationError",
     "CompileError",
+    "PlanFlow",
 ]

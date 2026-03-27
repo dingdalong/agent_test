@@ -88,6 +88,7 @@ docs/
    - 配置集中在 `config.yaml` + `.env`
 5. **开发规范**：
    - 每次完成任务后，如有必要，同步更新相关文档和测试用例
+   - 类型安全：所有函数签名必须有类型注解，使用 Protocol 而非具体类型，善用 TypedDict/dataclass/Pydantic model 定义数据结构
 6. **常用命令**：
    - `uv sync` — 安装依赖
    - `uv run python main.py` — 启动 agent
@@ -155,7 +156,7 @@ docs/
 ### docs/contributing.md
 
 1. **开发环境搭建**：`uv sync` + 配置 `.env`
-2. **代码规范**：Protocol 优先、分层依赖（低层不导入高层）、异步优先
+2. **代码规范**：Protocol 优先、分层依赖（低层不导入高层）、异步优先、类型安全（所有函数签名必须有类型注解，优先使用 Protocol/TypedDict/dataclass/Pydantic model）
 3. **添加新模块的步骤**：定义 Protocol → 实现 → bootstrap.py 注册 → 测试 → 更新文档
 4. **测试**：`uv run pytest`，测试目录结构镜像 `src/`
 5. **提交规范**：feat/fix/refactor/test/docs 前缀

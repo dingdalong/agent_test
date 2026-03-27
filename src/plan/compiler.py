@@ -200,13 +200,17 @@ class PlanCompiler:
             agent = registry.get(agent_name)
             agent_ctx = replace(ctx, input=resolved_prompt)
             result = await runner.run(agent, agent_ctx)
-            return NodeResult(output={"text": result.text, "data": result.data})
+            return NodeResult(output={"text": result.text, "data": result.data}, handoff=result.handoff)
 
         return fn
 
     @staticmethod
     def _make_merge_fn():
-        """并行组合并节点 -> 空操作透传。"""
+        """并行组合并节点 -> 空操作透传。
+
+        并行节点的结果已由 GraphEngine._write_state 写入 state，
+        后续节点通过 $step_id 变量引用读取。merge 节点仅作汇合点。
+        """
 
         async def fn(ctx: RunContext) -> NodeResult:
             return NodeResult(output=None)

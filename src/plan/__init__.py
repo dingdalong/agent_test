@@ -7,9 +7,7 @@ from src.plan.exceptions import (
     PlanError,
     JSONParseError,
     APIGenerationError,
-    DependencyError,
-    StepExecutionError,
-    PlanValidationError,
+    CompileError,
 )
 
 __all__ = [
@@ -24,7 +22,5 @@ __all__ = [
     "PlanError",
     "JSONParseError",
     "APIGenerationError",
-    "DependencyError",
-    "StepExecutionError",
-    "PlanValidationError",
+    "CompileError",
 ]

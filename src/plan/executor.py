@@ -7,7 +7,7 @@ from src.tools.router import ToolRouter
 from src.core.async_api import call_model
 from src.core.io import agent_input
 from src.plan.models import Plan, Step
-from src.plan.exceptions import VariableResolutionError, StepExecutionError, DependencyError, PlanValidationError
+from src.plan.exceptions import PlanError
 from config import PLAN_DEFAULT_TIMEOUT, PLAN_MAX_VARIABLE_DEPTH
 
 logger = logging.getLogger(__name__)
@@ -92,10 +92,8 @@ def topological_sort_layered(steps: List[Step]) -> List[List[Step]]:
     for step in steps:
         for dep in step.depends_on:
             if dep not in in_degree:
-                raise DependencyError(
-                    f"步骤 {step.id} 依赖不存在的步骤 {dep}",
-                    step_id=step.id,
-                    missing_deps=[dep]
+                raise PlanError(
+                    f"步骤 {step.id} 依赖不存在的步骤 {dep}"
                 )
             in_degree[step.id] += 1
 
@@ -118,10 +116,8 @@ def topological_sort_layered(steps: List[Step]) -> List[List[Step]]:
     total_sorted = sum(len(layer) for layer in layers)
     if total_sorted != len(steps):
         unsorted = set(step.id for step in steps) - {s.id for layer in layers for s in layer}
-        raise DependencyError(
-            f"存在循环依赖：步骤 {unsorted} 形成循环",
-            step_id=list(unsorted)[0] if unsorted else "",
-            missing_deps=list(unsorted)
+        raise PlanError(
+            f"存在循环依赖：步骤 {unsorted} 形成循环"
         )
 
     return layers
@@ -167,11 +163,8 @@ async def execute_step(
 
     if step.action == ACTION_TOOL:
         if not step.tool_name:
-            raise StepExecutionError(
-                "工具步骤缺少 tool_name",
-                step_id=step.id,
-                step_description=step.description,
-                action=step.action
+            raise PlanError(
+                f"工具步骤缺少 tool_name (步骤: {step.id})"
             )
         # 解析参数中的变量
         resolved_args = resolve_variables(step.tool_args or {}, context)
@@ -183,18 +176,12 @@ async def execute_step(
                 result = await coro
             return str(result)
         except (asyncio.TimeoutError, TimeoutError) as e:
-            raise StepExecutionError(
-                f"步骤执行超时({step_timeout}秒)",
-                step_id=step.id,
-                step_description=step.description,
-                action=step.action
+            raise PlanError(
+                f"步骤执行超时({step_timeout}秒) (步骤: {step.id})"
             ) from e
         except Exception as e:
-            raise StepExecutionError(
-                f"工具执行失败: {e}",
-                step_id=step.id,
-                step_description=step.description,
-                action=step.action
+            raise PlanError(
+                f"工具执行失败: {e} (步骤: {step.id})"
             ) from e
 
     elif step.action == ACTION_USER_INPUT:
@@ -204,11 +191,8 @@ async def execute_step(
             user_input = await agent_input(prompt)
             return user_input
         except Exception as e:
-            raise StepExecutionError(
-                f"用户输入获取失败: {e}",
-                step_id=step.id,
-                step_description=step.description,
-                action=step.action
+            raise PlanError(
+                f"用户输入获取失败: {e} (步骤: {step.id})"
             ) from e
 
     elif step.action == ACTION_SUBTASK:
@@ -222,28 +206,19 @@ async def execute_step(
             response, _, _ = await call_model(messages)
             return response
         except (asyncio.TimeoutError, TimeoutError) as e:
-            raise StepExecutionError(
-                f"子任务执行超时({step_timeout}秒)",
-                step_id=step.id,
-                step_description=step.description,
-                action=step.action
+            raise PlanError(
+                f"子任务执行超时({step_timeout}秒) (步骤: {step.id})"
             ) from e
-        except StepExecutionError:
+        except PlanError:
             raise
         except Exception as e:
-            raise StepExecutionError(
-                f"子任务执行失败: {e}",
-                step_id=step.id,
-                step_description=step.description,
-                action=step.action
+            raise PlanError(
+                f"子任务执行失败: {e} (步骤: {step.id})"
             ) from e
 
     else:
-        raise StepExecutionError(
-            f"未知动作类型: {step.action}",
-            step_id=step.id,
-            step_description=step.description,
-            action=step.action
+        raise PlanError(
+            f"未知动作类型: {step.action} (步骤: {step.id})"
         )
 
 def validate_plan(plan: Plan) -> None:
@@ -267,7 +242,7 @@ def validate_plan(plan: Plan) -> None:
             errors.append(f"步骤 {step.id} 类型为 tool 但缺少 tool_name")
 
     if errors:
-        raise PlanValidationError("计划验证失败", validation_errors=errors)
+        raise PlanError(f"计划验证失败: {'; '.join(errors)}")
 
 
 def _is_sensitive_tool_step(step: Step, tool_executor: ToolRouter) -> bool:
@@ -308,7 +283,7 @@ async def execute_plan(
     # 1. 分层拓扑排序
     try:
         layers = topological_sort_layered(plan.steps)
-    except DependencyError as e:
+    except PlanError as e:
         logger.error(f"依赖关系错误: {e}")
         raise
 

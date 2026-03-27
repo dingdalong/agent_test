@@ -250,7 +250,7 @@ async def test_slash_command_no_match(tmp_path):
 async def test_slash_command_reserved_prefix(tmp_path):
     skills_dir = tmp_path / "skills"
     skills_dir.mkdir()
-    _make_skill(skills_dir, "plan", "A plan skill.")
+    _make_skill(skills_dir, "book", "A book skill.")
     mgr = SkillManager(skill_dirs=[str(skills_dir)])
     await mgr.discover()
-    assert mgr.is_slash_command("/plan something") is None
+    assert mgr.is_slash_command("/book something") is None

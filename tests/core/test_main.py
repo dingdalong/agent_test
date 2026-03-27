@@ -49,17 +49,28 @@ def _load_main_with_stubs(user_id="test_user"):
             AgentRegistry=Mock(return_value=Mock()),
             GraphBuilder=Mock(return_value=Mock(
                 add_agent=Mock(return_value=Mock(
-                    set_entry=Mock(return_value=Mock(
-                        compile=Mock(return_value=Mock()),
+                    add_function=Mock(return_value=Mock(
+                        set_entry=Mock(return_value=Mock(
+                            compile=Mock(return_value=Mock()),
+                        )),
                     )),
                 )),
             )),
             GraphEngine=Mock(),
             RunContext=Mock(),
             DictState=Mock(),
+            NodeResult=Mock(),
+        ),
+        "src.plan": types.SimpleNamespace(
+            generate_plan=AsyncMock(),
+            adjust_plan=AsyncMock(),
+            classify_user_feedback=AsyncMock(),
+            check_clarification_needed=AsyncMock(),
+            PlanCompiler=Mock(),
         ),
         "config": types.SimpleNamespace(
             USER_ID=user_id, MCP_CONFIG_PATH="mcp_servers.json", SKILLS_DIRS=["skills/"],
+            PLAN_MAX_CLARIFICATION_ROUNDS=3, PLAN_MAX_ADJUSTMENTS=3,
         ),
         "src.mcp.config": types.SimpleNamespace(load_mcp_config=Mock(return_value={})),
         "src.mcp.manager": types.SimpleNamespace(MCPManager=Mock()),

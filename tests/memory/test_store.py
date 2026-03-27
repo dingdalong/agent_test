@@ -474,17 +474,28 @@ def _load_main_for_collection_test(user_id="User 42"):
             AgentRegistry=Mock(return_value=Mock()),
             GraphBuilder=Mock(return_value=Mock(
                 add_agent=Mock(return_value=Mock(
-                    set_entry=Mock(return_value=Mock(
-                        compile=Mock(return_value=Mock()),
+                    add_function=Mock(return_value=Mock(
+                        set_entry=Mock(return_value=Mock(
+                            compile=Mock(return_value=Mock()),
+                        )),
                     )),
                 )),
             )),
             GraphEngine=Mock(),
             RunContext=Mock(),
             DictState=Mock(),
+            NodeResult=Mock(),
+        ),
+        "src.plan": _types.SimpleNamespace(
+            generate_plan=_AsyncMock(),
+            adjust_plan=_AsyncMock(),
+            classify_user_feedback=_AsyncMock(),
+            check_clarification_needed=_AsyncMock(),
+            PlanCompiler=Mock(),
         ),
         "config": _types.SimpleNamespace(
             USER_ID=user_id, MCP_CONFIG_PATH="mcp_servers.json", SKILLS_DIRS=["skills/"],
+            PLAN_MAX_CLARIFICATION_ROUNDS=3, PLAN_MAX_ADJUSTMENTS=3,
         ),
         "src.mcp.config": _types.SimpleNamespace(load_mcp_config=Mock(return_value={})),
         "src.mcp.manager": _types.SimpleNamespace(MCPManager=Mock()),

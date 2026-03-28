@@ -14,7 +14,7 @@
 
 ```bash
 git clone <repo-url>
-cd aitest
+cd agent
 ```
 
 ### 2. 安装依赖

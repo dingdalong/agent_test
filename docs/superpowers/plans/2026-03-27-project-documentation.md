@@ -77,7 +77,7 @@
 
 ```bash
 git clone <repo-url>
-cd aitest
+cd agent
 uv sync
 ```
 
@@ -251,7 +251,7 @@ mkdir -p docs/guide
 
 ```bash
 git clone <repo-url>
-cd aitest
+cd agent
 ```
 
 ### 2. 安装依赖
@@ -1145,7 +1145,7 @@ git commit -m "docs: add architecture documentation for all modules"
 
 ```bash
 git clone <repo-url>
-cd aitest
+cd agent
 uv sync
 ```
 

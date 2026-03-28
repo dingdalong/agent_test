@@ -72,7 +72,7 @@ def test_tool_dict_type():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/test_tools_refactor.py::test_tool_dict_type -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/test_tools_refactor.py::test_tool_dict_type -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.tools.schemas'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -92,7 +92,7 @@ class ToolDict(TypedDict):
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/test_tools_refactor.py::test_tool_dict_type -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/test_tools_refactor.py::test_tool_dict_type -v`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
@@ -168,7 +168,7 @@ def test_registry_get_schemas():
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/test_tools_refactor.py::test_registry_register_and_get tests/test_tools_refactor.py::test_registry_duplicate_skips tests/test_tools_refactor.py::test_registry_get_schemas -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/test_tools_refactor.py::test_registry_register_and_get tests/test_tools_refactor.py::test_registry_duplicate_skips tests/test_tools_refactor.py::test_registry_get_schemas -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.tools.registry'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -237,7 +237,7 @@ class ToolRegistry:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/test_tools_refactor.py -v -k "registry"`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/test_tools_refactor.py -v -k "registry"`
 Expected: PASS (3 tests)
 
 - [ ] **Step 5: Commit**
@@ -310,7 +310,7 @@ def test_tool_decorator_custom_name():
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/test_tools_refactor.py -v -k "decorator"`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/test_tools_refactor.py -v -k "decorator"`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.tools.decorator'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -374,7 +374,7 @@ def tool(
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/test_tools_refactor.py -v -k "decorator"`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/test_tools_refactor.py -v -k "decorator"`
 Expected: PASS (3 tests)
 
 - [ ] **Step 5: Commit**
@@ -443,7 +443,7 @@ def test_discover_tools_skips_init(tmp_path):
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/test_tools_refactor.py -v -k "discover"`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/test_tools_refactor.py -v -k "discover"`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.tools.discovery'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -485,7 +485,7 @@ def discover_tools(
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/test_tools_refactor.py -v -k "discover"`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/test_tools_refactor.py -v -k "discover"`
 Expected: PASS (2 tests)
 
 - [ ] **Step 5: Commit**
@@ -602,7 +602,7 @@ async def test_executor_sync_function():
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/test_tools_refactor.py -v -k "executor"`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/test_tools_refactor.py -v -k "executor"`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.tools.executor'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -659,7 +659,7 @@ class ToolExecutor:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/test_tools_refactor.py -v -k "executor"`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/test_tools_refactor.py -v -k "executor"`
 Expected: PASS (4 tests)
 
 - [ ] **Step 5: Commit**
@@ -740,7 +740,7 @@ async def test_middleware_chain_order():
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/test_tools_refactor.py -v -k "middleware"`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/test_tools_refactor.py -v -k "middleware"`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.tools.middleware'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -829,7 +829,7 @@ def error_handler_middleware() -> Middleware:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/test_tools_refactor.py -v -k "middleware"`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/test_tools_refactor.py -v -k "middleware"`
 Expected: PASS (4 tests)
 
 - [ ] **Step 5: Commit**
@@ -996,7 +996,7 @@ def test_router_is_sensitive():
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/test_tools_refactor.py -v -k "router or provider"`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/test_tools_refactor.py -v -k "router or provider"`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.tools.router'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -1083,7 +1083,7 @@ class LocalToolProvider:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/test_tools_refactor.py -v -k "router or provider"`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/test_tools_refactor.py -v -k "router or provider"`
 Expected: PASS (6 tests)
 
 - [ ] **Step 5: Commit**
@@ -1193,7 +1193,7 @@ from src.tools.decorator import tool
 
 - [ ] **Step 4: 验证 builtin 工具能正确注册**
 
-Run: `cd /Users/dingdalong/github/aitest && python -c "
+Run: `cd /Users/dingdalong/github/agent && python -c "
 from src.tools.decorator import get_registry
 from src.tools.discovery import discover_tools
 from pathlib import Path
@@ -1356,7 +1356,7 @@ __all__ = [
 
 - [ ] **Step 2: 验证导入正常**
 
-Run: `cd /Users/dingdalong/github/aitest && python -c "
+Run: `cd /Users/dingdalong/github/agent && python -c "
 from src.tools import (
     ToolDict, ToolEntry, ToolRegistry,
     tool, get_registry, discover_tools,
@@ -1743,14 +1743,14 @@ git commit -m "refactor(tools): update plan executor to use ToolRouter"
 - [ ] **Step 1: 删除旧文件**
 
 ```bash
-cd /Users/dingdalong/github/aitest
+cd /Users/dingdalong/github/agent
 rm src/tools/calculator.py src/tools/file.py src/tools/weather.py src/tools/calendar.py src/tools/email.py src/tools/tool_executor.py
 ```
 
 - [ ] **Step 2: 验证没有残留引用**
 
 ```bash
-cd /Users/dingdalong/github/aitest
+cd /Users/dingdalong/github/agent
 grep -r "from src.tools.tool_executor" src/ main.py --include="*.py"
 grep -r "from src.tools.calculator" src/ main.py --include="*.py"
 grep -r "from src.tools.weather" src/ main.py --include="*.py"
@@ -1875,7 +1875,7 @@ async def test_router_skill_routing(tmp_path):
 
 - [ ] **Step 4: Run all tests**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/ -v --tb=short`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/ -v --tb=short`
 Expected: 全部通过
 
 - [ ] **Step 5: Commit**
@@ -1891,12 +1891,12 @@ git commit -m "refactor(tools): update all tests for new tools architecture"
 
 - [ ] **Step 1: 运行完整测试套件**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/ -v --tb=short`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/ -v --tb=short`
 Expected: 全部通过
 
 - [ ] **Step 2: 验证导入链完整**
 
-Run: `cd /Users/dingdalong/github/aitest && python -c "
+Run: `cd /Users/dingdalong/github/agent && python -c "
 from pathlib import Path
 from src.tools import (
     get_registry, discover_tools,

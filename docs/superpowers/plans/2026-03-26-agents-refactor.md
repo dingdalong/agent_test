@@ -144,7 +144,7 @@ def test_handoff_request():
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/test_agent.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/test_agent.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.agents.agent'`
 
 - [ ] **Step 3: Write the implementation**
@@ -208,7 +208,7 @@ class Agent:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/test_agent.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/test_agent.py -v`
 Expected: 6 passed
 
 - [ ] **Step 5: Commit**
@@ -314,7 +314,7 @@ def test_run_context_add_trace():
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/test_context.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/test_context.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
 - [ ] **Step 3: Write the implementation**
@@ -377,7 +377,7 @@ class RunContext(Generic[StateT, DepsT]):
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/test_context.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/test_context.py -v`
 Expected: 7 passed
 
 - [ ] **Step 5: Commit**
@@ -493,7 +493,7 @@ async def test_run_guardrails_first_block_stops(make_context):
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/test_guardrails.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/test_guardrails.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
 - [ ] **Step 3: Write the implementation**
@@ -541,7 +541,7 @@ async def run_guardrails(
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/test_guardrails.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/test_guardrails.py -v`
 Expected: 5 passed
 
 - [ ] **Step 5: Commit**
@@ -653,7 +653,7 @@ async def test_graph_hooks_none_is_noop():
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/test_hooks.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/test_hooks.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
 - [ ] **Step 3: Write the implementation**
@@ -746,7 +746,7 @@ class GraphHooks:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/test_hooks.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/test_hooks.py -v`
 Expected: 5 passed
 
 - [ ] **Step 5: Commit**
@@ -838,7 +838,7 @@ def test_has(registry, weather_agent):
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/test_registry.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/test_registry.py -v`
 Expected: FAIL (old registry doesn't have `has` method, imports mismatch)
 
 - [ ] **Step 3: Write the implementation**
@@ -880,7 +880,7 @@ class AgentRegistry:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/test_registry.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/test_registry.py -v`
 Expected: 5 passed
 
 - [ ] **Step 5: Commit**
@@ -995,7 +995,7 @@ def test_compiled_graph():
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/graph/test_types.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/graph/test_types.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
 - [ ] **Step 3: Write the implementation**
@@ -1095,7 +1095,7 @@ class CompiledGraph:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/graph/test_types.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/graph/test_types.py -v`
 Expected: 7 passed
 
 - [ ] **Step 5: Commit**
@@ -1251,7 +1251,7 @@ def test_compile_fails_with_unknown_parallel_node(simple_agent):
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/graph/test_builder.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/graph/test_builder.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
 - [ ] **Step 3: Write the implementation**
@@ -1353,7 +1353,7 @@ class GraphBuilder:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/graph/test_builder.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/graph/test_builder.py -v`
 Expected: 10 passed
 
 - [ ] **Step 5: Commit**
@@ -1578,7 +1578,7 @@ async def test_runner_dynamic_instructions(mock_router):
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/test_runner.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/test_runner.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
 - [ ] **Step 3: Write the implementation**
@@ -1812,7 +1812,7 @@ class AgentRunner:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/test_runner.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/test_runner.py -v`
 Expected: 5 passed
 
 - [ ] **Step 5: Commit**
@@ -2104,7 +2104,7 @@ async def test_graph_hooks_called(registry):
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/graph/test_engine.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/graph/test_engine.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
 - [ ] **Step 3: Write the implementation**
@@ -2333,7 +2333,7 @@ class GraphEngine:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/graph/test_engine.py -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/graph/test_engine.py -v`
 Expected: 8 passed
 
 - [ ] **Step 5: Commit**
@@ -2416,7 +2416,7 @@ __all__ = [
 
 - [ ] **Step 2: Run all agent tests to verify nothing breaks**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/agents/ -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/agents/ -v`
 Expected: All tests pass
 
 - [ ] **Step 3: Commit**
@@ -2470,7 +2470,7 @@ Remove all references to `MultiAgentFlow`, `FSMRunner`, `FlowModel`, flows impor
 
 - [ ] **Step 6: Run remaining tests to check for breakage**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/ -v --ignore=tests/flows --ignore=tests/core/test_fsm.py`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/ -v --ignore=tests/flows --ignore=tests/core/test_fsm.py`
 Expected: All non-deleted tests pass. Fix any import errors from other modules that referenced FSM/flows.
 
 - [ ] **Step 7: Commit**
@@ -2525,7 +2525,7 @@ async def handle_input(user_input, ...):
 
 - [ ] **Step 3: Run the application manually to smoke-test**
 
-Run: `cd /Users/dingdalong/github/aitest && python main.py`
+Run: `cd /Users/dingdalong/github/agent && python main.py`
 Test with a simple input. Verify the agent responds.
 
 - [ ] **Step 4: Commit**
@@ -2544,7 +2544,7 @@ git commit -m "feat: integrate GraphEngine into main.py, replace FSM-based handl
 
 - [ ] **Step 1: Run full test suite**
 
-Run: `cd /Users/dingdalong/github/aitest && python -m pytest tests/ -v`
+Run: `cd /Users/dingdalong/github/agent && python -m pytest tests/ -v`
 Expected: All tests pass.
 
 - [ ] **Step 2: Fix any broken imports or references**

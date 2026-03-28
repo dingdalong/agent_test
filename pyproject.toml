@@ -1,5 +1,5 @@
 [project]
-name = "aitest"
+name = "agent"
 version = "0.1.0"
 description = "my ai test"
 readme = "README.md"
@@ -34,4 +34,4 @@ dev = [
 ]
 
 [project.scripts]
-aitest = "main:main"
+agent = "main:main"

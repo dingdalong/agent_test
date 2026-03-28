@@ -31,7 +31,7 @@
 ## 2. 目标目录结构
 
 ```
-aitest/
+agent/
 ├── main.py                     # 薄入口
 ├── config.yaml                 # 用户/开发者配置文件（新增）
 ├── mcp_servers.json

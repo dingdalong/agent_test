@@ -25,7 +25,7 @@
 
 ```bash
 git clone <repo-url>
-cd aitest
+cd agent
 uv sync
 ```
 

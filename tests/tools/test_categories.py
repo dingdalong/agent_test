@@ -7,16 +7,19 @@ from pathlib import Path
 @pytest.fixture
 def valid_config(tmp_path: Path) -> Path:
     config = {
-        "version": 1,
+        "version": 2,
         "max_tools_per_category": 8,
         "categories": {
             "terminal": {
                 "description": "终端操作",
-                "tools": ["execute_command", "read_output"],
+                "tools": {
+                    "execute_command": "Execute a shell command",
+                    "read_output": "Read command output",
+                },
             },
             "calculation": {
                 "description": "数学计算",
-                "tools": ["calculate"],
+                "tools": {"calculate": "Perform math calculation"},
             },
         },
     }
@@ -28,7 +31,7 @@ def valid_config(tmp_path: Path) -> Path:
 @pytest.fixture
 def nested_config(tmp_path: Path) -> Path:
     config = {
-        "version": 1,
+        "version": 2,
         "max_tools_per_category": 8,
         "categories": {
             "text_editing": {
@@ -36,11 +39,14 @@ def nested_config(tmp_path: Path) -> Path:
                 "subcategories": {
                     "code_editing": {
                         "description": "代码编辑",
-                        "tools": ["edit_block", "search_code"],
+                        "tools": {
+                            "edit_block": "Edit a code block",
+                            "search_code": "Search in code",
+                        },
                     },
                     "document_editing": {
                         "description": "文档编辑",
-                        "tools": ["find_replace"],
+                        "tools": {"find_replace": "Find and replace text"},
                     },
                 },
             },
@@ -56,7 +62,10 @@ def test_load_categories_valid(valid_config: Path):
     result = load_categories(str(valid_config))
     assert "tool_terminal" in result
     assert result["tool_terminal"]["description"] == "终端操作"
-    assert result["tool_terminal"]["tools"] == ["execute_command", "read_output"]
+    assert result["tool_terminal"]["tools"] == {
+        "execute_command": "Execute a shell command",
+        "read_output": "Read command output",
+    }
     assert "tool_calculation" in result
 
 
@@ -65,7 +74,10 @@ def test_load_categories_nested(nested_config: Path):
     result = load_categories(str(nested_config))
     assert "tool_text_editing" not in result
     assert "tool_text_editing_code_editing" in result
-    assert result["tool_text_editing_code_editing"]["tools"] == ["edit_block", "search_code"]
+    assert result["tool_text_editing_code_editing"]["tools"] == {
+        "edit_block": "Edit a code block",
+        "search_code": "Search in code",
+    }
     assert "tool_text_editing_document_editing" in result
 
 
@@ -78,8 +90,8 @@ def test_load_categories_missing_file():
 def test_validate_categories_all_tools_covered():
     from src.tools.categories import validate_categories
     categories = {
-        "tool_a": {"description": "A", "tools": ["t1", "t2"]},
-        "tool_b": {"description": "B", "tools": ["t3"]},
+        "tool_a": {"description": "A", "tools": {"t1": "Tool 1", "t2": "Tool 2"}},
+        "tool_b": {"description": "B", "tools": {"t3": "Tool 3"}},
     }
     errors = validate_categories(categories, {"t1", "t2", "t3"})
     assert errors == []
@@ -87,7 +99,7 @@ def test_validate_categories_all_tools_covered():
 
 def test_validate_categories_missing_tools():
     from src.tools.categories import validate_categories
-    categories = {"tool_a": {"description": "A", "tools": ["t1"]}}
+    categories = {"tool_a": {"description": "A", "tools": {"t1": "Tool 1"}}}
     errors = validate_categories(categories, {"t1", "t2"})
     assert any("t2" in e for e in errors)
 
@@ -95,8 +107,8 @@ def test_validate_categories_missing_tools():
 def test_validate_categories_duplicate_tools():
     from src.tools.categories import validate_categories
     categories = {
-        "tool_a": {"description": "A", "tools": ["t1", "t2"]},
-        "tool_b": {"description": "B", "tools": ["t2"]},
+        "tool_a": {"description": "A", "tools": {"t1": "Tool 1", "t2": "Tool 2"}},
+        "tool_b": {"description": "B", "tools": {"t2": "Tool 2 again"}},
     }
     errors = validate_categories(categories, {"t1", "t2"})
     assert any("t2" in e for e in errors)
@@ -104,7 +116,7 @@ def test_validate_categories_duplicate_tools():
 
 def test_validate_categories_unknown_tools():
     from src.tools.categories import validate_categories
-    categories = {"tool_a": {"description": "A", "tools": ["t1", "unknown"]}}
+    categories = {"tool_a": {"description": "A", "tools": {"t1": "Tool 1", "unknown": "Unknown tool"}}}
     errors = validate_categories(categories, {"t1"})
     assert any("unknown" in e for e in errors)
 
@@ -118,7 +130,7 @@ def test_flatten_categories_instructions_passthrough(tmp_path: Path):
         "categories": {
             "terminal": {
                 "description": "终端操作",
-                "tools": ["execute_command"],
+                "tools": {"execute_command": "Execute a shell command"},
                 "instructions": "只在必要时使用",
             }
         }
@@ -136,7 +148,7 @@ def test_validate_categories_invalid_snake_case_name():
     from src.tools.categories import validate_categories
 
     categories = {
-        "tool_Bad-Name": {"description": "错误命名示例", "tools": ["t1"]},
+        "tool_Bad-Name": {"description": "错误命名示例", "tools": {"t1": "Tool 1"}},
     }
     errors = validate_categories(categories, {"t1"})
     assert any("Bad-Name" in e or "tool_Bad-Name" in e for e in errors)
@@ -151,7 +163,7 @@ def test_category_resolver_can_resolve():
     """can_resolve 对已知类别返回 True，未知类别返回 False。"""
     from src.tools.categories import CategoryResolver
 
-    cats = {"tool_terminal": {"description": "终端操作", "tools": ["exec", "read"]}}
+    cats = {"tool_terminal": {"description": "终端操作", "tools": {"exec": "Execute", "read": "Read"}}}
     resolver = CategoryResolver(cats)
     assert resolver.can_resolve("tool_terminal") is True
     assert resolver.can_resolve("tool_unknown") is False
@@ -161,13 +173,13 @@ def test_category_resolver_get_category():
     """get_category 返回原始 CategoryEntry，不存在时返回 None。"""
     from src.tools.categories import CategoryResolver
 
-    cats = {"tool_terminal": {"description": "终端操作", "tools": ["exec", "read"]}}
+    cats = {"tool_terminal": {"description": "终端操作", "tools": {"exec": "Execute", "read": "Read"}}}
     resolver = CategoryResolver(cats)
 
     cat = resolver.get_category("tool_terminal")
     assert cat is not None
     assert cat["description"] == "终端操作"
-    assert cat["tools"] == ["exec", "read"]
+    assert cat["tools"] == {"exec": "Execute", "read": "Read"}
 
     assert resolver.get_category("tool_unknown") is None
 
@@ -176,7 +188,7 @@ def test_category_resolver_build_instructions_default():
     """无自定义 instructions 时，使用模板自动生成。"""
     from src.tools.categories import CategoryResolver
 
-    cats = {"tool_terminal": {"description": "终端操作", "tools": ["exec", "read"]}}
+    cats = {"tool_terminal": {"description": "终端操作", "tools": {"exec": "Execute", "read": "Read"}}}
     resolver = CategoryResolver(cats)
     instructions = resolver.build_instructions("tool_terminal")
 
@@ -192,7 +204,7 @@ def test_category_resolver_build_instructions_custom():
     cats = {
         "tool_terminal": {
             "description": "终端操作",
-            "tools": ["exec"],
+            "tools": {"exec": "Execute"},
             "instructions": "自定义指令",
         }
     }
@@ -214,8 +226,8 @@ def test_category_resolver_get_all_summaries():
     from src.tools.categories import CategoryResolver
 
     cats = {
-        "tool_terminal": {"description": "终端操作", "tools": ["exec"]},
-        "tool_calc": {"description": "计算", "tools": ["calc"]},
+        "tool_terminal": {"description": "终端操作", "tools": {"exec": "Execute"}},
+        "tool_calc": {"description": "计算", "tools": {"calc": "Calculate"}},
     }
     resolver = CategoryResolver(cats)
     summaries = resolver.get_all_summaries()

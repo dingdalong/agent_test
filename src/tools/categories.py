@@ -16,10 +16,13 @@ logger = logging.getLogger(__name__)
 
 
 class CategoryEntry(TypedDict, total=False):
-    """叶子类别条目，包含 description、tools，以及可选的 instructions。"""
+    """叶子类别条目，包含 description、tools，以及可选的 instructions。
+
+    tools 是 {工具名: 工具描述} 的映射，便于 orchestrator 无需活跃连接即可路由。
+    """
 
     description: Required[str]
-    tools: Required[list[str]]
+    tools: Required[dict[str, str]]
     instructions: str
 
 
@@ -74,7 +77,7 @@ def _flatten_categories(
             # 叶子节点
             entry: CategoryEntry = {
                 "description": cat["description"],
-                "tools": list(cat["tools"]),
+                "tools": dict(cat["tools"]),
             }
             if "instructions" in cat:
                 entry["instructions"] = cat["instructions"]
@@ -117,7 +120,7 @@ def validate_categories(
             errors.append(f"类别名 {cat_name} 不合法（需要 snake_case）")
 
         # 校验工具：存在性与唯一性
-        for tool_name in cat.get("tools", []):
+        for tool_name in cat.get("tools", {}).keys():
             if tool_name in seen_tools:
                 errors.append(
                     f"工具 {tool_name} 重复出现在 {seen_tools[tool_name]} 和 {cat_name}"
@@ -179,7 +182,7 @@ class CategoryResolver:
         cat = self._categories[agent_name]
         return cat.get("instructions") or _TOOL_AGENT_INSTRUCTIONS_TEMPLATE.format(
             description=cat["description"],
-            tool_names="、".join(cat["tools"]),
+            tool_names="、".join(cat["tools"].keys()),
         )
 
     def get_all_summaries(self) -> list[dict[str, str]]:

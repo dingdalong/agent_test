@@ -80,8 +80,11 @@ def build_classify_prompt(
         "- 合并功能相似的工具到同一类别\n"
         "- 类别名使用 snake_case\n"
         "- 每个工具只能属于一个类别\n\n"
+        "- 类别描述要详细，概述该类别包含的所有功能\n\n"
         "请以 JSON 格式输出，格式如下：\n"
-        '{"categories": [{"name": "...", "description": "...", "tools": [...]}]}\n\n'
+        '{"categories": [{"name": "...", "description": "详细的类别描述", '
+        '"tools": {"tool_name": "tool_description", ...}}]}\n\n'
+        "tools 字段是一个对象，key 是工具名，value 是工具描述。\n"
         "只输出 JSON，不要输出其他内容。"
     )
 
@@ -111,7 +114,7 @@ def parse_classify_response(raw: str) -> dict[str, dict[str, Any]]:
         key = f"tool_{name}"
         result[key] = {
             "description": cat["description"],
-            "tools": list(cat["tools"]),
+            "tools": dict(cat["tools"]),
         }
     return result
 
@@ -130,7 +133,7 @@ def build_split_prompt(
     当一个类别包含的工具数超过 max_per_category 时，
     要求 LLM 将其拆分成更小的子类别。
     """
-    tools_str = ", ".join(category["tools"])
+    tools_str = ", ".join(f"{name}: {desc}" for name, desc in category["tools"].items())
     return (
         f"类别 \"{category_name}\" 包含太多工具，请将其拆分为更小的子类别。\n\n"
         f"类别描述：{category['description']}\n"
@@ -138,9 +141,12 @@ def build_split_prompt(
         "约束：\n"
         f"- 每个子类别最多包含 {max_per_category} 个工具\n"
         "- 子类别名使用 snake_case\n"
-        "- 每个工具只能属于一个子类别\n\n"
+        "- 每个工具只能属于一个子类别\n"
+        "- 子类别描述要详细\n\n"
         "请以 JSON 格式输出，格式如下：\n"
-        '{"subcategories": [{"name": "...", "description": "...", "tools": [...]}]}\n\n'
+        '{"subcategories": [{"name": "...", "description": "详细的子类别描述", '
+        '"tools": {"tool_name": "tool_description", ...}}]}\n\n'
+        "tools 字段是一个对象，key 是工具名，value 是工具描述。\n"
         "只输出 JSON，不要输出其他内容。"
     )
 
@@ -167,7 +173,7 @@ def parse_split_response(raw: str) -> dict[str, dict[str, Any]]:
         name = sub["name"]
         result[name] = {
             "description": sub["description"],
-            "tools": list(sub["tools"]),
+            "tools": dict(sub["tools"]),
         }
     return result
 

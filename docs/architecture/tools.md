@@ -15,10 +15,11 @@ class ToolProvider(Protocol):
     def get_schemas(self) -> list[ToolDict]: ...
 ```
 
-三种实现：
+四种实现：
 - `LocalToolProvider` — 本地 @tool 装饰器注册的工具
 - `MCPToolProvider`（`src/mcp/provider.py`）— MCP 服务器提供的工具
 - `SkillToolProvider`（`src/skills/provider.py`）— 技能提供的工具
+- `DelegateToolProvider`（`src/tools/delegate.py`）— 将 Tool Agent 包装为可调用工具，支持 `delegate_<agent_name>(task=...)` 形式的复合调用
 
 ### ToolRouter（`src/tools/router.py`）
 
@@ -66,5 +67,6 @@ LLM 返回 tool_calls
     → provider.can_handle(name)?
       → LocalToolProvider: middleware → executor → 工具函数
       → MCPToolProvider: MCP 协议调用
+      → DelegateToolProvider: 创建子 RunContext → AgentRunner 驱动子 Agent
   → 结果返回 AgentRunner → 加入消息 → 继续 LLM 对话
 ```

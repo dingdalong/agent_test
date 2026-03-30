@@ -140,3 +140,88 @@ def test_validate_categories_invalid_snake_case_name():
     }
     errors = validate_categories(categories, {"t1"})
     assert any("Bad-Name" in e or "tool_Bad-Name" in e for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# CategoryResolver 测试
+# ---------------------------------------------------------------------------
+
+
+def test_category_resolver_can_resolve():
+    """can_resolve 对已知类别返回 True，未知类别返回 False。"""
+    from src.tools.categories import CategoryResolver
+
+    cats = {"tool_terminal": {"description": "终端操作", "tools": ["exec", "read"]}}
+    resolver = CategoryResolver(cats)
+    assert resolver.can_resolve("tool_terminal") is True
+    assert resolver.can_resolve("tool_unknown") is False
+
+
+def test_category_resolver_get_category():
+    """get_category 返回原始 CategoryEntry，不存在时返回 None。"""
+    from src.tools.categories import CategoryResolver
+
+    cats = {"tool_terminal": {"description": "终端操作", "tools": ["exec", "read"]}}
+    resolver = CategoryResolver(cats)
+
+    cat = resolver.get_category("tool_terminal")
+    assert cat is not None
+    assert cat["description"] == "终端操作"
+    assert cat["tools"] == ["exec", "read"]
+
+    assert resolver.get_category("tool_unknown") is None
+
+
+def test_category_resolver_build_instructions_default():
+    """无自定义 instructions 时，使用模板自动生成。"""
+    from src.tools.categories import CategoryResolver
+
+    cats = {"tool_terminal": {"description": "终端操作", "tools": ["exec", "read"]}}
+    resolver = CategoryResolver(cats)
+    instructions = resolver.build_instructions("tool_terminal")
+
+    assert "终端操作" in instructions
+    assert "exec" in instructions
+    assert "read" in instructions
+
+
+def test_category_resolver_build_instructions_custom():
+    """有自定义 instructions 时，直接使用而非模板。"""
+    from src.tools.categories import CategoryResolver
+
+    cats = {
+        "tool_terminal": {
+            "description": "终端操作",
+            "tools": ["exec"],
+            "instructions": "自定义指令",
+        }
+    }
+    resolver = CategoryResolver(cats)
+    assert resolver.build_instructions("tool_terminal") == "自定义指令"
+
+
+def test_category_resolver_build_instructions_unknown_raises():
+    """对未知类别调用 build_instructions 应抛出 KeyError。"""
+    from src.tools.categories import CategoryResolver
+
+    resolver = CategoryResolver({})
+    with pytest.raises(KeyError):
+        resolver.build_instructions("tool_nonexistent")
+
+
+def test_category_resolver_get_all_summaries():
+    """get_all_summaries 返回所有类别的 name 和 description。"""
+    from src.tools.categories import CategoryResolver
+
+    cats = {
+        "tool_terminal": {"description": "终端操作", "tools": ["exec"]},
+        "tool_calc": {"description": "计算", "tools": ["calc"]},
+    }
+    resolver = CategoryResolver(cats)
+    summaries = resolver.get_all_summaries()
+
+    assert len(summaries) == 2
+    names = {s["name"] for s in summaries}
+    assert names == {"tool_terminal", "tool_calc"}
+    descs = {s["description"] for s in summaries}
+    assert descs == {"终端操作", "计算"}

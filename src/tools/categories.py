@@ -1,7 +1,8 @@
 """工具分类配置加载与校验。
 
 从 tool_categories.json 中加载分类树，展平为叶子节点映射，
-并校验分类的完整性与一致性。
+并校验分类的完整性与一致性。CategoryResolver 按需解析分类条目，
+供上层（AgentRegistry）创建 Agent 实例。
 """
 from __future__ import annotations
 
@@ -133,3 +134,57 @@ def validate_categories(
         errors.append(f"工具 {tool_name} 未被分配到任何类别")
 
     return errors
+
+
+# ---------------------------------------------------------------------------
+# CategoryResolver — 按需解析分类条目
+# ---------------------------------------------------------------------------
+
+_TOOL_AGENT_INSTRUCTIONS_TEMPLATE = (
+    "你是{description}方面的专家。\n"
+    "使用你拥有的工具完成用户交给你的任务。\n"
+    "可用工具：{tool_names}。\n"
+    "只使用你拥有的工具，完成任务后返回结果摘要。"
+)
+
+
+class CategoryResolver:
+    """从分类配置按需解析类别数据，供上层创建 Tool Agent。
+
+    本类位于 Layer 1，不直接依赖 Layer 2 的 Agent 数据模型。
+    它返回原始数据（CategoryEntry / dict / str），由上层
+    （如 AgentRegistry）负责构造 Agent 实例。
+    """
+
+    def __init__(self, categories: dict[str, CategoryEntry]) -> None:
+        self._categories = categories
+
+    def can_resolve(self, agent_name: str) -> bool:
+        """判断 agent_name 是否为已知的工具类别。"""
+        return agent_name in self._categories
+
+    def get_category(self, agent_name: str) -> CategoryEntry | None:
+        """返回指定类别的原始条目，不存在时返回 None。"""
+        return self._categories.get(agent_name)
+
+    def build_instructions(self, agent_name: str) -> str:
+        """构建指定类别的 agent 系统指令。
+
+        若类别条目中包含自定义 instructions 则直接使用，
+        否则根据模板自动生成。
+
+        Raises:
+            KeyError: agent_name 不在已知类别中。
+        """
+        cat = self._categories[agent_name]
+        return cat.get("instructions") or _TOOL_AGENT_INSTRUCTIONS_TEMPLATE.format(
+            description=cat["description"],
+            tool_names="、".join(cat["tools"]),
+        )
+
+    def get_all_summaries(self) -> list[dict[str, str]]:
+        """返回所有类别的 name + description，供 orchestrator 使用。"""
+        return [
+            {"name": name, "description": cat["description"]}
+            for name, cat in self._categories.items()
+        ]

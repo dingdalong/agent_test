@@ -1,0 +1,73 @@
+{
+  "version": 2,
+  "max_tools_per_category": 8,
+  "categories": {
+    "calculation": {
+      "description": "Basic mathematical calculation tool",
+      "tools": {
+        "calculator": "Perform basic math calculations"
+      }
+    },
+    "configuration_management": {
+      "description": "Tools for managing Desktop Commander server configuration and settings",
+      "tools": {
+        "mcp_desktop_commander_get_config": "Get current server configuration",
+        "mcp_desktop_commander_set_config_value": "Set a server configuration value"
+      }
+    },
+    "file_editing": {
+      "description": "Tools for making surgical edits to various file formats",
+      "tools": {
+        "mcp_desktop_commander_edit_block": "Edit a block of text in a file"
+      }
+    },
+    "file_operations": {
+      "description": "Tools for reading, writing, and manipulating files and directories",
+      "tools": {
+        "mcp_desktop_commander_read_file": "Read complete contents of a file",
+        "mcp_desktop_commander_read_multiple_files": "Read contents of multiple files at once",
+        "mcp_desktop_commander_write_file": "Create or overwrite a file with content",
+        "mcp_desktop_commander_write_pdf": "Write content to a PDF file",
+        "mcp_desktop_commander_create_directory": "Create a new directory",
+        "mcp_desktop_commander_list_directory": "List contents of a directory",
+        "mcp_desktop_commander_move_file": "Move or rename a file or directory",
+        "mcp_desktop_commander_get_file_info": "Get metadata about a file"
+      }
+    },
+    "file_search": {
+      "description": "Tools for searching files and content with streaming and pagination",
+      "tools": {
+        "mcp_desktop_commander_start_search": "Start a file content search",
+        "mcp_desktop_commander_get_more_search_results": "Get next page of search results",
+        "mcp_desktop_commander_stop_search": "Stop an ongoing search",
+        "mcp_desktop_commander_list_searches": "List active searches"
+      }
+    },
+    "process_management": {
+      "description": "Tools for running, interacting with, and managing terminal processes",
+      "tools": {
+        "mcp_desktop_commander_start_process": "Start a new terminal process",
+        "mcp_desktop_commander_read_process_output": "Read output from a running process",
+        "mcp_desktop_commander_interact_with_process": "Send input to a running process",
+        "mcp_desktop_commander_force_terminate": "Force terminate a process",
+        "mcp_desktop_commander_list_sessions": "List active terminal sessions",
+        "mcp_desktop_commander_list_processes": "List running processes",
+        "mcp_desktop_commander_kill_process": "Kill a process by PID"
+      }
+    },
+    "system_monitoring": {
+      "description": "Tools for monitoring system usage, statistics, and tool history",
+      "tools": {
+        "mcp_desktop_commander_get_usage_stats": "Get system usage statistics",
+        "mcp_desktop_commander_get_recent_tool_calls": "Get recent tool call history"
+      }
+    },
+    "user_interaction": {
+      "description": "Tools for user feedback and onboarding prompts",
+      "tools": {
+        "mcp_desktop_commander_give_feedback_to_desktop_commander": "Submit feedback to Desktop Commander",
+        "mcp_desktop_commander_get_prompts": "Get available onboarding prompts"
+      }
+    }
+  }
+}

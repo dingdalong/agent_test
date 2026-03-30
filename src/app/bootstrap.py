@@ -41,7 +41,7 @@ async def create_app(config_path: str = "config.yaml") -> AgentApp:
     1. 加载 config.yaml + .env
     2. 创建 LLM provider（OpenAIProvider）
     3. 发现并注册本地工具，构建中间件管道
-    4. 连接 MCP 服务器，注册外部工具
+    4. 加载 MCP 配置（不连接），注册工具提供者
     5. 发现技能
     6. 注册预设智能体，构建默认图
     7. 组装 AgentDeps 依赖容器
@@ -73,11 +73,11 @@ async def create_app(config_path: str = "config.yaml") -> AgentApp:
     tool_router = ToolRouter()
     tool_router.add_provider(LocalToolProvider(registry, executor, middlewares))
 
-    # 3. MCP
+    # 3. MCP — 只加载配置，不连接。连接在 DelegateToolProvider.execute 中按需触发
     mcp_config_path = raw.get("mcp", {}).get("config_path", "mcp_servers.json")
-    mcp_manager = MCPManager(configs=load_mcp_config(mcp_config_path))
-    await mcp_manager.connect_all()
-    if mcp_manager.get_tools_schemas():
+    mcp_configs = load_mcp_config(mcp_config_path)
+    mcp_manager = MCPManager(configs=mcp_configs)
+    if mcp_configs:
         tool_router.add_provider(MCPToolProvider(mcp_manager))
 
     # 4. Skills
@@ -175,6 +175,7 @@ async def create_app(config_path: str = "config.yaml") -> AgentApp:
             runner=runner,
             registry=agent_registry,
             deps=deps,
+            mcp_manager=mcp_manager,
         )
         tool_router.add_provider(delegate_provider)
 

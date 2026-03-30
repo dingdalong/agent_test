@@ -58,7 +58,7 @@ class AgentRegistry:
                 name=name,
                 description=cat["description"],  # type: ignore[index]
                 instructions=instructions,
-                tools=list(cat["tools"]),  # type: ignore[index]
+                tools=list(cat["tools"].keys()),  # type: ignore[index]
                 handoffs=[],
             )
             self.register(agent)

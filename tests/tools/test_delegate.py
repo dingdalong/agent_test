@@ -7,8 +7,8 @@ from src.tools.categories import CategoryResolver
 @pytest.fixture
 def resolver():
     cats = {
-        "tool_terminal": {"description": "终端操作", "tools": ["exec"]},
-        "tool_calc": {"description": "数学计算", "tools": ["calc"]},
+        "tool_terminal": {"description": "终端操作", "tools": {"exec": "Execute command"}},
+        "tool_calc": {"description": "数学计算", "tools": {"calc": "Calculate math"}},
     }
     return CategoryResolver(cats)
 

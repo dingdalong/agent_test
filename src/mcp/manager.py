@@ -19,12 +19,28 @@ logger = logging.getLogger(__name__)
 class MCPManager:
     """Manages MCP Server connections, tool discovery, and tool call routing."""
 
-    def __init__(self):
+    def __init__(self, configs: list[MCPServerConfig] | None = None):
         self._exit_stack = AsyncExitStack()
         self._sessions: dict[str, ClientSession] = {}
         self._tool_map: dict[str, tuple[str, str]] = {}  # full_name -> (server_name, original_name)
         self._timeouts: dict[str, float] = {}
         self._tools_schemas: list[dict] = []
+        # 按 safe_name 存储配置，供 connect_server 按需连接使用
+        self._configs: dict[str, MCPServerConfig] = {
+            re.sub(r"[^a-zA-Z0-9_]", "_", cfg.name): cfg
+            for cfg in (configs or [])
+        }
+
+    async def connect_server(self, safe_name: str) -> None:
+        """按需连接单个 MCP Server（幂等）。
+
+        已连接的 server 直接返回；未知 safe_name 抛出 KeyError。
+        """
+        if safe_name in self._sessions:
+            return
+        if safe_name not in self._configs:
+            raise KeyError(f"未知 MCP Server: '{safe_name}'")
+        await self._connect_one(self._configs[safe_name])
 
     def _make_tool_name(self, server_name: str, tool_name: str) -> str:
         """Create prefixed tool name: mcp_{server}_{tool}. Non-alphanumeric chars converted to underscores."""

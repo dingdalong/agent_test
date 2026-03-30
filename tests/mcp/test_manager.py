@@ -114,3 +114,47 @@ def test_mcp_provider_does_not_handle_local_tools():
     provider = MCPToolProvider(mock_mcp)
     assert not provider.can_handle("calculator")
     assert not provider.can_handle("write_file")
+
+
+from src.mcp.config import MCPServerConfig
+
+
+def test_init_with_configs_stores_by_safe_name():
+    """构造时传入 configs，按 safe_name 存储，不连接。"""
+    configs = [
+        MCPServerConfig(name="desktop-commander", transport="stdio", command="npx"),
+        MCPServerConfig(name="my.api", transport="http", url="http://localhost:8080"),
+    ]
+    mgr = MCPManager(configs=configs)
+    assert "desktop_commander" in mgr._configs
+    assert "my_api" in mgr._configs
+    assert mgr._sessions == {}  # 未连接
+
+
+def test_init_without_configs():
+    """无参构造仍然可用。"""
+    mgr = MCPManager()
+    assert mgr._configs == {}
+    assert mgr._sessions == {}
+
+
+@pytest.mark.asyncio
+async def test_connect_server_idempotent():
+    """已连接的 server 再次调用 connect_server 不会重复连接。"""
+    configs = [
+        MCPServerConfig(name="test-server", transport="stdio", command="echo"),
+    ]
+    mgr = MCPManager(configs=configs)
+    # 手动注入一个 fake session 来模拟已连接状态
+    mgr._sessions["test_server"] = "fake_session"
+    await mgr.connect_server("test_server")
+    # session 不变，说明没有重新连接
+    assert mgr._sessions["test_server"] == "fake_session"
+
+
+def test_connect_server_unknown_name_raises():
+    """传入未知 server name 应报错。"""
+    mgr = MCPManager()
+    import asyncio
+    with pytest.raises(KeyError):
+        asyncio.get_event_loop().run_until_complete(mgr.connect_server("nonexistent"))

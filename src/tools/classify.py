@@ -45,10 +45,14 @@ def detect_changes(
 
 
 def _collect_tools(categories: dict, out: set[str]) -> None:
-    """递归收集配置中所有工具名。"""
+    """递归收集配置中所有工具名。支持 dict 和 list 两种 tools 格式。"""
     for cat in categories.values():
         if "tools" in cat:
-            out.update(cat["tools"])
+            tools = cat["tools"]
+            if isinstance(tools, dict):
+                out.update(tools.keys())
+            else:
+                out.update(tools)
         if "subcategories" in cat:
             _collect_tools(cat["subcategories"], out)
 
@@ -57,16 +61,16 @@ def _build_output(
     categories: dict[str, dict[str, Any]],
     max_per_category: int,
 ) -> dict[str, Any]:
-    """将叶子映射转为输出 JSON 格式。"""
+    """将叶子映射转为输出 JSON 格式（version 2，tools 为 dict）。"""
     raw_categories: dict[str, Any] = {}
     for agent_name, cat in sorted(categories.items()):
         path = agent_name.removeprefix("tool_")
         raw_categories[path] = {
             "description": cat["description"],
-            "tools": cat["tools"],
+            "tools": dict(cat["tools"]),
         }
     return {
-        "version": 1,
+        "version": 2,
         "max_tools_per_category": max_per_category,
         "categories": raw_categories,
     }

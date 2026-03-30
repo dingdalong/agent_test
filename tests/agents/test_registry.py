@@ -72,7 +72,7 @@ def test_has(registry, weather_agent):
 def test_lazy_resolve_from_category_resolver(registry):
     from src.tools.categories import CategoryResolver
 
-    cats = {"tool_terminal": {"description": "终端操作", "tools": ["exec"]}}
+    cats = {"tool_terminal": {"description": "终端操作", "tools": {"exec": "Execute command"}}}
     resolver = CategoryResolver(cats)
     registry.set_category_resolver(resolver)
 

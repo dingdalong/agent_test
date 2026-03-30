@@ -62,3 +62,37 @@ def test_has(registry, weather_agent):
     assert not registry.has("weather_agent")
     registry.register(weather_agent)
     assert registry.has("weather_agent")
+
+
+# ---------------------------------------------------------------------------
+# CategoryResolver 懒加载
+# ---------------------------------------------------------------------------
+
+
+def test_lazy_resolve_from_category_resolver(registry):
+    from src.tools.categories import CategoryResolver
+
+    cats = {"tool_terminal": {"description": "终端操作", "tools": ["exec"]}}
+    resolver = CategoryResolver(cats)
+    registry.set_category_resolver(resolver)
+
+    assert not registry.has("tool_terminal")  # has 不触发懒加载
+    agent = registry.get("tool_terminal")
+    assert agent is not None
+    assert agent.name == "tool_terminal"
+    assert agent.description == "终端操作"
+    assert agent.tools == ["exec"]
+    assert registry.has("tool_terminal")  # 已缓存
+    assert registry.get("tool_terminal") is agent  # 返回同一实例
+
+
+def test_lazy_resolve_unknown_returns_none(registry):
+    from src.tools.categories import CategoryResolver
+
+    resolver = CategoryResolver({})
+    registry.set_category_resolver(resolver)
+    assert registry.get("nonexistent") is None
+
+
+def test_no_resolver_get_returns_none(registry):
+    assert registry.get("nonexistent") is None

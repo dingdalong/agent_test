@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from src.mcp.manager import MCPManager
 
@@ -158,3 +160,76 @@ def test_connect_server_unknown_name_raises():
     import asyncio
     with pytest.raises(KeyError):
         asyncio.get_event_loop().run_until_complete(mgr.connect_server("nonexistent"))
+
+
+# ---------------------------------------------------------------------------
+# Task 2: ensure_servers_for_tools
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_ensure_servers_for_tools_connects_needed():
+    """ensure_servers_for_tools 根据工具名前缀，连接所需但未连接的 server。"""
+    configs = [
+        MCPServerConfig(name="desktop-commander", transport="stdio", command="npx"),
+        MCPServerConfig(name="another-server", transport="stdio", command="echo"),
+    ]
+    mgr = MCPManager(configs=configs)
+    connected: list[str] = []
+
+    async def fake_connect(safe_name: str) -> None:
+        if safe_name not in mgr._configs:
+            raise KeyError(safe_name)
+        mgr._sessions[safe_name] = "fake"
+        connected.append(safe_name)
+
+    mgr.connect_server = fake_connect
+
+    await mgr.ensure_servers_for_tools([
+        "mcp_desktop_commander_read_file",
+        "mcp_desktop_commander_write_file",
+        "calculator",
+    ])
+    assert connected == ["desktop_commander"]
+    assert "another_server" not in connected
+
+
+@pytest.mark.asyncio
+async def test_ensure_servers_for_tools_skips_connected():
+    """已连接的 server 不会重复连接。"""
+    configs = [
+        MCPServerConfig(name="desktop-commander", transport="stdio", command="npx"),
+    ]
+    mgr = MCPManager(configs=configs)
+    mgr._sessions["desktop_commander"] = "already_connected"
+
+    connected: list[str] = []
+
+    async def fake_connect(safe_name: str) -> None:
+        connected.append(safe_name)
+
+    mgr.connect_server = fake_connect
+
+    await mgr.ensure_servers_for_tools(["mcp_desktop_commander_read_file"])
+    assert connected == []
+
+
+@pytest.mark.asyncio
+async def test_ensure_servers_for_tools_longest_prefix_match():
+    """当存在 server name 前缀包含关系时，使用最长前缀匹配。"""
+    configs = [
+        MCPServerConfig(name="foo", transport="stdio", command="echo"),
+        MCPServerConfig(name="foo-bar", transport="stdio", command="echo"),
+    ]
+    mgr = MCPManager(configs=configs)
+    connected: list[str] = []
+
+    async def fake_connect(safe_name: str) -> None:
+        if safe_name not in mgr._configs:
+            raise KeyError(safe_name)
+        mgr._sessions[safe_name] = "fake"
+        connected.append(safe_name)
+
+    mgr.connect_server = fake_connect
+
+    await mgr.ensure_servers_for_tools(["mcp_foo_bar_some_tool"])
+    assert connected == ["foo_bar"]

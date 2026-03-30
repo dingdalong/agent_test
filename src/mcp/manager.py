@@ -86,6 +86,29 @@ class MCPManager:
         """Return all discovered MCP tools in OpenAI format."""
         return list(self._tools_schemas)
 
+    async def ensure_servers_for_tools(self, tool_names: list[str]) -> None:
+        """按需连接工具名对应的 MCP Server（幂等）。
+
+        仅处理以 "mcp_" 开头的工具名；非 MCP 工具静默忽略。
+        使用最长前缀匹配避免 "foo" 与 "foo_bar" 歧义：按 safe_name 长度降序
+        检查每个已配置 server 的 "mcp_{safe_name}_" 前缀是否匹配工具名。
+        """
+        # 按 safe_name 长度降序排列，确保最长前缀优先匹配
+        sorted_keys = sorted(self._configs.keys(), key=len, reverse=True)
+
+        needed: set[str] = set()
+        for tool_name in tool_names:
+            if not tool_name.startswith("mcp_"):
+                continue
+            for safe_name in sorted_keys:
+                if tool_name.startswith(f"mcp_{safe_name}_"):
+                    if safe_name not in self._sessions:
+                        needed.add(safe_name)
+                    break  # 最长前缀已找到，不再继续
+
+        for safe_name in needed:
+            await self.connect_server(safe_name)
+
     async def connect_all(self, configs: list[MCPServerConfig], connect_timeout: float = 30.0) -> None:
         """Connect to all configured MCP Servers. Failures are logged and skipped."""
         for config in configs:

@@ -190,4 +190,5 @@ async def create_app(config_path: str = "config.yaml") -> AgentApp:
         mcp_manager=mcp_manager,
         runner=runner,
         conversation_buffer=conversation_buffer,
+        category_summaries=category_summaries,
     )

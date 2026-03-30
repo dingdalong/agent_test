@@ -47,6 +47,7 @@ class AgentApp:
         mcp_manager: MCPManager,
         runner: AgentRunner,
         conversation_buffer: ConversationBuffer | None = None,
+        category_summaries: list[dict[str, str]] | None = None,
     ):
         self.deps = deps
         self.ui = ui
@@ -59,6 +60,7 @@ class AgentApp:
         self.mcp_manager = mcp_manager
         self.runner = runner
         self.conversation_buffer = conversation_buffer
+        self._category_summaries: list[dict[str, str]] = category_summaries or []
 
     async def process(self, user_input: str) -> None:
         """处理单条用户消息。"""
@@ -99,22 +101,13 @@ class AgentApp:
             return
         remaining = user_input[len(f"/{skill_name}"):].strip()
         actual_input = remaining or f"已激活 {skill_name} skill，请按指令执行。"
-        # 从主 registry 获取分类摘要，传递给 skill 图
-        category_summaries: list[dict[str, str]] = []
-        if (
-            hasattr(self.agent_registry, "_category_resolver")
-            and self.agent_registry._category_resolver
-        ):
-            category_summaries = (
-                self.agent_registry._category_resolver.get_all_summaries()
-            )
         skill_registry = AgentRegistry()
         skill_runner = AgentRunner(registry=skill_registry)
         skill_graph = build_skill_graph(
             skill_registry,
             skill_content,
             runner=skill_runner,
-            category_summaries=category_summaries,
+            category_summaries=self._category_summaries,
         )
         skill_engine = GraphEngine()
         ctx = RunContext(

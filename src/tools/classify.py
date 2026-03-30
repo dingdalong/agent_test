@@ -94,59 +94,61 @@ async def run_classify(force: bool = False, output: str = DEFAULT_OUTPUT) -> Non
     except Exception:
         logger.warning("MCP 连接失败，仅使用本地工具", exc_info=True)
 
-    all_schemas = local_schemas + mcp_schemas
-    all_tool_names = {s["function"]["name"] for s in all_schemas}
+    try:
+        all_schemas = local_schemas + mcp_schemas
+        all_tool_names = {s["function"]["name"] for s in all_schemas}
 
-    if not all_schemas:
-        print("未发现任何工具，退出。")
-        return
-
-    # 3. Change detection
-    if not force:
-        changed, added, removed = detect_changes(all_tool_names, output)
-        if not changed:
-            print("工具列表无变化，跳过分类。使用 --force 强制重分类。")
+        if not all_schemas:
+            print("未发现任何工具，退出。")
             return
-        if added:
-            print(f"新增工具：{', '.join(sorted(added))}")
-        if removed:
-            print(f"移除工具：{', '.join(sorted(removed))}")
 
-    # 4. LLM classification
-    llm_cfg = raw.get("llm", {})
-    from src.llm.openai import OpenAIProvider
+        # 3. Change detection
+        if not force:
+            changed, added, removed = detect_changes(all_tool_names, output)
+            if not changed:
+                print("工具列表无变化，跳过分类。使用 --force 强制重分类。")
+                return
+            if added:
+                print(f"新增工具：{', '.join(sorted(added))}")
+            if removed:
+                print(f"移除工具：{', '.join(sorted(removed))}")
 
-    llm = OpenAIProvider(
-        api_key=llm_cfg.get("api_key", ""),
-        base_url=llm_cfg.get("base_url", ""),
-        model=llm_cfg.get("model", ""),
-    )
-    max_per_category = raw.get("tools", {}).get("max_tools_per_category", 8)
-    print(f"正在分类 {len(all_schemas)} 个工具（上限 {max_per_category}/类别）...")
-    categories = await classify_tools(all_schemas, llm, max_per_category)
+        # 4. LLM classification
+        llm_cfg = raw.get("llm", {})
+        from src.llm.openai import OpenAIProvider
 
-    # 5. Validate
-    errors = validate_categories(categories, all_tool_names)
-    if errors:
-        print("分类校验失败：")
-        for e in errors:
-            print(f"  - {e}")
-        print("未写入配置。")
-        return
+        llm = OpenAIProvider(
+            api_key=llm_cfg.get("api_key", ""),
+            base_url=llm_cfg.get("base_url", ""),
+            model=llm_cfg.get("model", ""),
+        )
+        max_per_category = raw.get("tools", {}).get("max_tools_per_category", 8)
+        print(f"正在分类 {len(all_schemas)} 个工具（上限 {max_per_category}/类别）...")
+        categories = await classify_tools(all_schemas, llm, max_per_category)
 
-    # 6. Write output
-    output_data = _build_output(categories, max_per_category)
-    with open(output, "w", encoding="utf-8") as f:
-        json.dump(output_data, f, indent=2, ensure_ascii=False)
+        # 5. Validate
+        errors = validate_categories(categories, all_tool_names)
+        if errors:
+            print("分类校验失败：")
+            for e in errors:
+                print(f"  - {e}")
+            print("未写入配置。")
+            return
 
-    cat_count = len(categories)
-    tool_count = sum(len(c["tools"]) for c in categories.values())
-    print(f"\n分类结果已写入 {output}，请 review 后提交。")
-    print(f"共 {cat_count} 个类别，{tool_count} 个工具。")
+        # 6. Write output
+        output_data = _build_output(categories, max_per_category)
+        with open(output, "w", encoding="utf-8") as f:
+            json.dump(output_data, f, indent=2, ensure_ascii=False)
 
-    # 7. Cleanup
-    if mcp_manager:
-        await mcp_manager.disconnect_all()
+        cat_count = len(categories)
+        tool_count = sum(len(c["tools"]) for c in categories.values())
+        print(f"\n分类结果已写入 {output}，请 review 后提交。")
+        print(f"共 {cat_count} 个类别，{tool_count} 个工具。")
+
+    finally:
+        # 7. Cleanup — 无论是否出错都断开 MCP 连接，避免连接泄漏
+        if mcp_manager:
+            await mcp_manager.disconnect_all()
 
 
 def main() -> None:

@@ -7,8 +7,8 @@
 协议设计详见 docs/superpowers/specs/2026-03-31-structured-delegation-protocol-design.md
 
 本模块位于 Layer 1（src/tools/），对 Layer 2 的依赖
-（AgentRunner、AgentRegistry、AgentDeps）仅在 TYPE_CHECKING
-或 execute() 运行时才导入，不违反分层约束。
+（RunContext、AgentRunner、AgentRegistry）仅在 execute() 运行时才导入，
+不违反分层约束。
 """
 from __future__ import annotations
 
@@ -17,9 +17,6 @@ from typing import TYPE_CHECKING, Any
 from src.tools.schemas import ToolDict
 
 if TYPE_CHECKING:
-    from src.agents.deps import AgentDeps
-    from src.agents.registry import AgentRegistry
-    from src.agents.runner import AgentRunner
     from src.mcp.manager import MCPManager
     from src.tools.categories import CategoryResolver
 
@@ -72,21 +69,10 @@ class DelegateToolProvider:
     def __init__(
         self,
         resolver: CategoryResolver,
-        runner: AgentRunner,
-        registry: AgentRegistry,
-        deps: AgentDeps,
         mcp_manager: MCPManager | None = None,
     ) -> None:
         self._resolver = resolver
-        self._runner = runner
-        self._registry = registry
-        self._deps = deps
         self._mcp_manager = mcp_manager
-        self._delegate_depth: int = 0
-
-    def set_delegate_depth(self, depth: int) -> None:
-        """设置当前委派深度，由 ToolRouter 在每次 run 前同步。"""
-        self._delegate_depth = depth
 
     def can_handle(self, tool_name: str) -> bool:
         """判断 tool_name 是否为已知的 delegate 工具。"""
@@ -132,17 +118,25 @@ class DelegateToolProvider:
             })
         return schemas
 
-    async def execute(self, tool_name: str, arguments: dict[str, Any]) -> str:
-        """委派执行：按需连接 MCP server，创建子 RunContext 并驱动 AgentRunner。
+    async def execute(self, tool_name: str, arguments: dict[str, Any], context: Any = None) -> str:
+        """委派执行：从 context.deps 获取 registry/runner，创建子 RunContext。
 
         注意：子 RunContext 与父级共享同一 deps（含 tool_router）。
         当前 AgentRunner 串行执行工具调用，因此不存在并发问题。
         若未来支持并行工具调用，需要为每次 delegate 创建独立的 deps 副本。
         """
+        if context is None:
+            return "错误：delegate 调用缺少执行上下文"
+
         from src.agents.context import DynamicState, RunContext
 
         agent_name = tool_name[len(DELEGATE_PREFIX):]
-        agent = self._registry.get(agent_name)
+
+        registry = getattr(context.deps, "agent_registry", None)
+        if registry is None:
+            return "错误：deps 中缺少 agent_registry"
+
+        agent = registry.get(agent_name)
         if agent is None:
             return f"错误：找不到 agent {agent_name}"
 
@@ -155,20 +149,24 @@ class DelegateToolProvider:
         # 从结构化参数构建接收方 input
         task = arguments.get("task", "")
         objective = arguments.get("objective", task)
-        context = arguments.get("context")
+        ctx_str = arguments.get("context")
         expected_result = arguments.get("expected_result")
         receiving_input = _build_receiving_input(
             objective=objective,
             task=task,
-            context=context,
+            context=ctx_str,
             expected_result=expected_result,
         )
+
+        runner = getattr(context.deps, "runner", None)
+        if runner is None:
+            return "错误：deps 中缺少 runner"
 
         sub_ctx: RunContext = RunContext(
             input=receiving_input,
             state=DynamicState(),
-            deps=self._deps,
-            delegate_depth=self._delegate_depth + 1,
+            deps=context.deps,
+            delegate_depth=context.delegate_depth + 1,
         )
-        result = await self._runner.run(agent, sub_ctx)
+        result = await runner.run(agent, sub_ctx)
         return result.text

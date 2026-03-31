@@ -39,18 +39,11 @@ async def test_delegate_end_to_end(resolver, registry):
     """Agent_A 通过 delegate 调用 Agent_B，获取结果并继续完成任务。"""
     mock_llm = AsyncMock()
 
-    # Agent_A (tool_terminal) 的 LLM 响应序列：
-    # 1. 先调用 delegate_tool_calc(task="计算 1+1")
-    # 2. 收到结果后输出最终回答
-    #
-    # Agent_B (tool_calc) 的 LLM 响应：
-    # 1. 直接返回 "2"（不调用工具）
     call_count = 0
 
     async def mock_chat(messages, tools=None, silent=True):
         nonlocal call_count
         call_count += 1
-        # 第一次调用来自 Agent_A — 决定 delegate
         if call_count == 1:
             return LLMResponse(
                 content="",
@@ -65,10 +58,8 @@ async def test_delegate_end_to_end(resolver, registry):
                     }),
                 }},
             )
-        # 第二次调用来自 Agent_B (被 delegate) — 直接返回结果
         if call_count == 2:
             return LLMResponse(content="计算结果是 2", tool_calls={})
-        # 第三次调用来自 Agent_A — 收到 delegate 结果后输出
         return LLMResponse(content="命令执行完毕，1+1=2", tool_calls={})
 
     mock_llm.chat = mock_chat
@@ -76,28 +67,31 @@ async def test_delegate_end_to_end(resolver, registry):
     runner = AgentRunner()
     router = ToolRouter()
 
+    # DelegateToolProvider 只接收 resolver
     delegate_provider = DelegateToolProvider(
         resolver=resolver,
-        runner=runner,
-        registry=registry,
-        deps=AgentDeps(llm=mock_llm, tool_router=router),
     )
     router.add_provider(delegate_provider)
 
-    # 获取 Agent_A (lazy-loaded, includes delegate tools)
     agent_a = registry.get("tool_terminal")
     assert "delegate_tool_calc" in agent_a.tools
 
+    # runner 和 registry 通过 deps 传递
     ctx = RunContext(
         input="执行计算任务",
         state=DynamicState(),
-        deps=AgentDeps(llm=mock_llm, tool_router=router),
+        deps=AgentDeps(
+            llm=mock_llm,
+            tool_router=router,
+            agent_registry=registry,
+            runner=runner,
+        ),
         delegate_depth=0,
     )
     result = await runner.run(agent_a, ctx)
 
     assert "2" in result.text
-    assert call_count == 3  # A调用1次 + B调用1次 + A调用1次
+    assert call_count == 3
 
 
 @pytest.mark.asyncio
@@ -108,7 +102,6 @@ async def test_delegated_agent_cannot_delegate_further(resolver, registry):
     tools_seen_by_b = []
 
     async def mock_chat(messages, tools=None, silent=True):
-        # 记录传给 LLM 的工具列表
         if tools:
             tools_seen_by_b.extend([t["function"]["name"] for t in tools])
         return LLMResponse(content="结果", tool_calls={})
@@ -118,18 +111,19 @@ async def test_delegated_agent_cannot_delegate_further(resolver, registry):
     runner = AgentRunner()
     router = ToolRouter()
 
-    deps = AgentDeps(llm=mock_llm, tool_router=router)
+    deps = AgentDeps(
+        llm=mock_llm,
+        tool_router=router,
+        agent_registry=registry,
+        runner=runner,
+    )
     delegate_provider = DelegateToolProvider(
         resolver=resolver,
-        runner=runner,
-        registry=registry,
-        deps=deps,
     )
     router.add_provider(delegate_provider)
 
     agent_b = registry.get("tool_calc")
 
-    # 模拟被 delegate 调用（depth=1）
     ctx = RunContext(
         input="计算 1+1",
         state=DynamicState(),
@@ -138,6 +132,17 @@ async def test_delegated_agent_cannot_delegate_further(resolver, registry):
     )
     await runner.run(agent_b, ctx)
 
-    # Agent_B 应只看到自己的工具，不含任何 delegate 工具
     delegate_tools = [t for t in tools_seen_by_b if t.startswith("delegate_")]
     assert delegate_tools == [], f"Agent_B should not see delegate tools, but saw: {delegate_tools}"
+
+
+@pytest.mark.asyncio
+async def test_delegate_execute_without_context_returns_error(resolver):
+    """context=None 时应返回错误信息。"""
+    provider = DelegateToolProvider(resolver=resolver)
+    result = await provider.execute(
+        "delegate_tool_calc",
+        {"objective": "test", "task": "test"},
+        context=None,
+    )
+    assert "错误" in result

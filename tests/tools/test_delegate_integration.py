@@ -57,7 +57,12 @@ async def test_delegate_end_to_end(resolver, registry):
                 tool_calls={0: {
                     "id": "call_delegate",
                     "name": "delegate_tool_calc",
-                    "arguments": json.dumps({"task": "计算 1+1"}),
+                    "arguments": json.dumps({
+                        "objective": "执行计算任务，获取 1+1 的结果",
+                        "task": "计算 1+1",
+                        "context": "用户要求执行计算任务",
+                        "expected_result": "计算结果数值",
+                    }),
                 }},
             )
         # 第二次调用来自 Agent_B (被 delegate) — 直接返回结果

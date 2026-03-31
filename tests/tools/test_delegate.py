@@ -29,17 +29,24 @@ def mock_registry(resolver):
 
 
 @pytest.fixture
-def mock_deps():
+def mock_deps(mock_runner, mock_registry):
     from src.agents.deps import AgentDeps
-    return AgentDeps()
+    return AgentDeps(runner=mock_runner, agent_registry=mock_registry)
 
 
 @pytest.fixture
-def provider(resolver, mock_runner, mock_registry, mock_deps):
+def mock_context(mock_deps):
+    """构造一个带 deps 和 delegate_depth 的最小 context 对象。"""
+    ctx = MagicMock()
+    ctx.deps = mock_deps
+    ctx.delegate_depth = 0
+    return ctx
+
+
+@pytest.fixture
+def provider(resolver):
     from src.tools.delegate import DelegateToolProvider
-    return DelegateToolProvider(
-        resolver=resolver, runner=mock_runner, registry=mock_registry, deps=mock_deps,
-    )
+    return DelegateToolProvider(resolver=resolver)
 
 
 def test_can_handle(provider):
@@ -64,10 +71,10 @@ def test_get_schemas(provider):
 
 
 @pytest.mark.asyncio
-async def test_execute_delegates_to_runner(provider, mock_runner):
+async def test_execute_delegates_to_runner(provider, mock_runner, mock_context):
     from src.agents.agent import AgentResult
     mock_runner.run = AsyncMock(return_value=AgentResult(text="已完成\n执行完成"))
-    result = await provider.execute("delegate_tool_terminal", {"task": "列出当前目录"})
+    result = await provider.execute("delegate_tool_terminal", {"task": "列出当前目录"}, context=mock_context)
     assert "执行完成" in result
     mock_runner.run.assert_called_once()
     call_args = mock_runner.run.call_args
@@ -78,11 +85,11 @@ async def test_execute_delegates_to_runner(provider, mock_runner):
 
 
 @pytest.mark.asyncio
-async def test_execute_unknown_agent(provider):
+async def test_execute_unknown_agent(provider, mock_context):
     # Replace registry with one that can't resolve the agent
-    provider._registry = MagicMock()
-    provider._registry.get = MagicMock(return_value=None)
-    result = await provider.execute("delegate_tool_unknown", {"task": "test"})
+    mock_context.deps.agent_registry = MagicMock()
+    mock_context.deps.agent_registry.get = MagicMock(return_value=None)
+    result = await provider.execute("delegate_tool_unknown", {"task": "test"}, context=mock_context)
     assert "错误" in result
 
 
@@ -106,19 +113,21 @@ async def test_execute_ensures_mcp_connection():
     test_registry.set_category_resolver(test_resolver)
     test_runner = AsyncMock()
     test_runner.run = AsyncMock(return_value=AgentResult(text="done"))
-    test_deps = AgentDeps()
+    test_deps = AgentDeps(runner=test_runner, agent_registry=test_registry)
 
     mock_mcp = AsyncMock()
     mock_mcp.ensure_servers_for_tools = AsyncMock()
 
     provider = DelegateToolProvider(
         resolver=test_resolver,
-        runner=test_runner,
-        registry=test_registry,
-        deps=test_deps,
         mcp_manager=mock_mcp,
     )
-    await provider.execute("delegate_tool_files", {"task": "read something"})
+
+    ctx = MagicMock()
+    ctx.deps = test_deps
+    ctx.delegate_depth = 0
+
+    await provider.execute("delegate_tool_files", {"task": "read something"}, context=ctx)
     mock_mcp.ensure_servers_for_tools.assert_called_once_with([
         "mcp_desktop_commander_read_file",
         "mcp_desktop_commander_write_file",
@@ -139,15 +148,15 @@ async def test_execute_no_mcp_manager_still_works():
     test_registry.set_category_resolver(test_resolver)
     test_runner = AsyncMock()
     test_runner.run = AsyncMock(return_value=AgentResult(text="42"))
-    test_deps = AgentDeps()
+    test_deps = AgentDeps(runner=test_runner, agent_registry=test_registry)
 
-    provider = DelegateToolProvider(
-        resolver=test_resolver,
-        runner=test_runner,
-        registry=test_registry,
-        deps=test_deps,
-    )
-    result = await provider.execute("delegate_tool_calc", {"task": "1+1"})
+    provider = DelegateToolProvider(resolver=test_resolver)
+
+    ctx = MagicMock()
+    ctx.deps = test_deps
+    ctx.delegate_depth = 0
+
+    result = await provider.execute("delegate_tool_calc", {"task": "1+1"}, context=ctx)
     assert result == "42"
 
 
@@ -165,15 +174,15 @@ async def test_execute_propagates_delegate_depth():
     test_registry.set_category_resolver(test_resolver)
     test_runner = AsyncMock()
     test_runner.run = AsyncMock(return_value=AgentResult(text="done"))
-    test_deps = AgentDeps()
+    test_deps = AgentDeps(runner=test_runner, agent_registry=test_registry)
 
-    provider = DelegateToolProvider(
-        resolver=test_resolver,
-        runner=test_runner,
-        registry=test_registry,
-        deps=test_deps,
-    )
-    await provider.execute("delegate_tool_terminal", {"task": "run ls"})
+    provider = DelegateToolProvider(resolver=test_resolver)
+
+    ctx = MagicMock()
+    ctx.deps = test_deps
+    ctx.delegate_depth = 0
+
+    await provider.execute("delegate_tool_terminal", {"task": "run ls"}, context=ctx)
 
     call_args = test_runner.run.call_args
     sub_ctx = call_args[0][1]
@@ -194,16 +203,15 @@ async def test_execute_propagates_parent_delegate_depth():
     test_registry.set_category_resolver(test_resolver)
     test_runner = AsyncMock()
     test_runner.run = AsyncMock(return_value=AgentResult(text="done"))
-    test_deps = AgentDeps()
+    test_deps = AgentDeps(runner=test_runner, agent_registry=test_registry)
 
-    provider = DelegateToolProvider(
-        resolver=test_resolver,
-        runner=test_runner,
-        registry=test_registry,
-        deps=test_deps,
-    )
-    provider.set_delegate_depth(1)
-    await provider.execute("delegate_tool_terminal", {"task": "run ls"})
+    provider = DelegateToolProvider(resolver=test_resolver)
+
+    ctx = MagicMock()
+    ctx.deps = test_deps
+    ctx.delegate_depth = 1
+
+    await provider.execute("delegate_tool_terminal", {"task": "run ls"}, context=ctx)
 
     call_args = test_runner.run.call_args
     sub_ctx = call_args[0][1]
@@ -297,7 +305,7 @@ def test_get_schemas_description_uses_template(provider):
 
 
 @pytest.mark.asyncio
-async def test_execute_builds_structured_input(provider, mock_runner):
+async def test_execute_builds_structured_input(provider, mock_runner, mock_context):
     """execute 应用接收方模板组装 input，包含 objective/task/context/expected_result。"""
     from src.agents.agent import AgentResult
 
@@ -307,7 +315,7 @@ async def test_execute_builds_structured_input(provider, mock_runner):
         "task": "列出当前目录",
         "context": "用户在 /home/user 目录下",
         "expected_result": "文件列表",
-    })
+    }, context=mock_context)
 
     call_args = mock_runner.run.call_args
     ctx = call_args[0][1]
@@ -318,7 +326,7 @@ async def test_execute_builds_structured_input(provider, mock_runner):
 
 
 @pytest.mark.asyncio
-async def test_execute_optional_fields_omitted(provider, mock_runner):
+async def test_execute_optional_fields_omitted(provider, mock_runner, mock_context):
     """只传 objective 和 task 时，input 不包含 context 和 expected_result 行。"""
     from src.agents.agent import AgentResult
 
@@ -326,7 +334,7 @@ async def test_execute_optional_fields_omitted(provider, mock_runner):
     await provider.execute("delegate_tool_terminal", {
         "objective": "查天气",
         "task": "查询天气预报",
-    })
+    }, context=mock_context)
 
     call_args = mock_runner.run.call_args
     ctx = call_args[0][1]
@@ -337,12 +345,12 @@ async def test_execute_optional_fields_omitted(provider, mock_runner):
 
 
 @pytest.mark.asyncio
-async def test_execute_backward_compat_task_only(provider, mock_runner):
+async def test_execute_backward_compat_task_only(provider, mock_runner, mock_context):
     """兼容旧格式：只传 task 时，objective 用 task 兜底。"""
     from src.agents.agent import AgentResult
 
     mock_runner.run = AsyncMock(return_value=AgentResult(text="已完成\n42"))
-    await provider.execute("delegate_tool_terminal", {"task": "计算 1+1"})
+    await provider.execute("delegate_tool_terminal", {"task": "计算 1+1"}, context=mock_context)
 
     call_args = mock_runner.run.call_args
     ctx = call_args[0][1]

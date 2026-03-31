@@ -146,12 +146,10 @@ async def create_app(config_path: str = "config.yaml") -> AgentApp:
         agent_registry.set_category_resolver(category_resolver)
 
     runner = AgentRunner(
-        registry=agent_registry,
         max_tool_rounds=agent_cfg.get("max_tool_rounds", 10),
     )
     graph = build_default_graph(
         agent_registry,
-        runner=runner,
         category_summaries=category_summaries,
     )
     engine = GraphEngine(max_handoff_depth=agent_cfg.get("max_handoffs", 10))
@@ -164,6 +162,7 @@ async def create_app(config_path: str = "config.yaml") -> AgentApp:
         graph_engine=engine,
         ui=ui,
         memory=memory_store,
+        runner=runner,
     )
 
     # 7.5 Delegate Tool Provider
@@ -172,9 +171,6 @@ async def create_app(config_path: str = "config.yaml") -> AgentApp:
     if category_resolver:
         delegate_provider = DelegateToolProvider(
             resolver=category_resolver,
-            runner=runner,
-            registry=agent_registry,
-            deps=deps,
             mcp_manager=mcp_manager,
         )
         tool_router.add_provider(delegate_provider)
@@ -192,4 +188,5 @@ async def create_app(config_path: str = "config.yaml") -> AgentApp:
         runner=runner,
         conversation_buffer=conversation_buffer,
         category_summaries=category_summaries,
+        category_resolver=category_resolver,
     )

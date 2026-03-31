@@ -58,3 +58,4 @@ class RunContext(Generic[StateT, DepsT]):
     trace: list[TraceEvent] = field(default_factory=list)
     current_agent: str = ""
     depth: int = 0
+    delegate_depth: int = 0  # 委派深度：0=顶层，≥1=被 delegate 调用

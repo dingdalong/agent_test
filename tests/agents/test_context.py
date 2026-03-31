@@ -81,6 +81,20 @@ def test_run_context_add_trace():
     assert ctx.trace[1].event == "end"
 
 
+def test_run_context_delegate_depth_default():
+    from src.agents.context import RunContext, DynamicState
+
+    ctx = RunContext(input="test", state=DynamicState(), deps=AgentDeps())
+    assert ctx.delegate_depth == 0
+
+
+def test_run_context_delegate_depth_custom():
+    from src.agents.context import RunContext, DynamicState
+
+    ctx = RunContext(input="test", state=DynamicState(), deps=AgentDeps(), delegate_depth=2)
+    assert ctx.delegate_depth == 2
+
+
 class TestAgentDeps:
 
     def test_default_fields_are_none(self):

@@ -1,8 +1,8 @@
+# tests/agents/test_runner.py
 """AgentRunner 测试 — mock deps.llm.chat 和 ToolRouter。"""
 import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from pydantic import BaseModel, ConfigDict
 
 from src.agents.agent import Agent, AgentResult, HandoffRequest
 from src.agents.context import RunContext, DynamicState
@@ -31,7 +31,6 @@ def mock_router():
             },
         }
     ])
-    router.set_delegate_depth = MagicMock()  # 同步方法，避免 RuntimeWarning
     return router
 
 
@@ -78,7 +77,7 @@ async def test_runner_simple_response(simple_agent, mock_router, mock_llm):
         deps=AgentDeps(llm=mock_llm, tool_router=mock_router),
     )
 
-    runner = AgentRunner(registry=AgentRegistry())
+    runner = AgentRunner()
     result = await runner.run(simple_agent, ctx)
 
     assert result.text == "Hello back!"
@@ -103,11 +102,12 @@ async def test_runner_tool_call_loop(simple_agent, mock_router, mock_llm):
         deps=AgentDeps(llm=mock_llm, tool_router=mock_router),
     )
 
-    runner = AgentRunner(registry=AgentRegistry())
+    runner = AgentRunner()
     result = await runner.run(simple_agent, ctx)
 
     assert "25" in result.text
-    mock_router.route.assert_called_once_with("get_weather", {"city": "Beijing"})
+    # route 现在接收 3 个参数：name, args, context
+    mock_router.route.assert_called_once_with("get_weather", {"city": "Beijing"}, ctx)
 
 
 @pytest.mark.asyncio
@@ -126,10 +126,10 @@ async def test_runner_handoff_detection(handoff_agent, mock_router, mock_llm, re
     ctx = RunContext(
         input="book a meeting",
         state=DynamicState(),
-        deps=AgentDeps(llm=mock_llm, tool_router=mock_router),
+        deps=AgentDeps(llm=mock_llm, tool_router=mock_router, agent_registry=registry),
     )
 
-    runner = AgentRunner(registry=registry)
+    runner = AgentRunner()
     result = await runner.run(handoff_agent, ctx)
 
     assert result.handoff is not None
@@ -159,7 +159,7 @@ async def test_runner_max_rounds(simple_agent, mock_router, mock_llm):
         deps=AgentDeps(llm=mock_llm, tool_router=mock_router),
     )
 
-    runner = AgentRunner(registry=AgentRegistry(), max_tool_rounds=2)
+    runner = AgentRunner(max_tool_rounds=2)
     result = await runner.run(simple_agent, ctx)
 
     assert mock_llm.chat.call_count == 3  # 2 rounds + 1 final
@@ -186,7 +186,7 @@ async def test_runner_dynamic_instructions(mock_router, mock_llm):
         deps=AgentDeps(llm=mock_llm, tool_router=mock_router),
     )
 
-    runner = AgentRunner(registry=AgentRegistry())
+    runner = AgentRunner()
     await runner.run(agent, ctx)
 
     messages = mock_llm.chat.call_args[0][0]
@@ -194,8 +194,8 @@ async def test_runner_dynamic_instructions(mock_router, mock_llm):
 
 
 @pytest.mark.asyncio
-async def test_runner_sets_delegate_depth_on_router(mock_llm):
-    """runner 应在工具调用前将 context.delegate_depth 同步到 tool_router。"""
+async def test_runner_passes_context_to_route(mock_llm):
+    """runner 应在 tool_router.route() 调用时透传 context。"""
     from src.agents.runner import AgentRunner
 
     mock_llm.chat = AsyncMock(side_effect=[
@@ -208,7 +208,6 @@ async def test_runner_sets_delegate_depth_on_router(mock_llm):
 
     mock_router = AsyncMock()
     mock_router.route = AsyncMock(return_value="2")
-    mock_router.set_delegate_depth = MagicMock()
     mock_router.get_all_schemas = MagicMock(return_value=[
         {
             "type": "function",
@@ -233,11 +232,14 @@ async def test_runner_sets_delegate_depth_on_router(mock_llm):
         delegate_depth=0,
     )
 
-    runner = AgentRunner(registry=AgentRegistry())
+    runner = AgentRunner()
     await runner.run(agent, ctx)
 
-    assert mock_router.set_delegate_depth.called
-    mock_router.set_delegate_depth.assert_called_with(0)
+    # 验证 route 被调用时传入了 context
+    call_args = mock_router.route.call_args
+    assert call_args[0][0] == "delegate_tool_calc"       # tool_name
+    assert call_args[0][1] == {"task": "1+1"}             # arguments
+    assert call_args[0][2] is ctx                         # context
 
 
 def test_build_tools_includes_delegates_at_depth_0():
@@ -253,7 +255,7 @@ def test_build_tools_includes_delegates_at_depth_0():
     agent = Agent(name="test", description="Test", instructions="Test.", tools=["exec", "delegate_tool_calc"])
     ctx = RunContext(input="test", state=DynamicState(), deps=AgentDeps(tool_router=mock_router), delegate_depth=0)
 
-    runner = AgentRunner(registry=AgentRegistry())
+    runner = AgentRunner()
     tools = runner._build_tools(agent, ctx)
 
     names = [t["function"]["name"] for t in tools]
@@ -274,9 +276,30 @@ def test_build_tools_excludes_delegates_at_depth_1():
     agent = Agent(name="test", description="Test", instructions="Test.", tools=["exec", "delegate_tool_calc"])
     ctx = RunContext(input="test", state=DynamicState(), deps=AgentDeps(tool_router=mock_router), delegate_depth=1)
 
-    runner = AgentRunner(registry=AgentRegistry())
+    runner = AgentRunner()
     tools = runner._build_tools(agent, ctx)
 
     names = [t["function"]["name"] for t in tools]
     assert "exec" in names
     assert "delegate_tool_calc" not in names
+
+
+def test_build_handoff_tools_uses_context_registry():
+    """_build_handoff_tools 应从 context.deps.agent_registry 获取 agent 描述。"""
+    from src.agents.runner import AgentRunner
+
+    registry = AgentRegistry()
+    registry.register(Agent(name="target", description="目标 agent", instructions=""))
+    agent = Agent(name="test", description="Test", instructions="", handoffs=["target"])
+    ctx = RunContext(
+        input="test",
+        state=DynamicState(),
+        deps=AgentDeps(agent_registry=registry),
+    )
+
+    runner = AgentRunner()
+    tools = runner._build_handoff_tools(agent, ctx)
+
+    assert len(tools) == 1
+    assert tools[0]["function"]["name"] == "transfer_to_target"
+    assert "目标 agent" in tools[0]["function"]["description"]

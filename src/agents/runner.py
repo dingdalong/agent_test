@@ -9,7 +9,6 @@ from typing import Any
 
 from src.agents.agent import Agent, AgentResult, HandoffRequest
 from src.agents.context import RunContext, TraceEvent, AppState
-from src.agents.registry import AgentRegistry
 from src.guardrails import run_guardrails
 from src.llm.structured import build_output_schema, parse_output
 
@@ -27,11 +26,9 @@ class AgentRunner:
 
     def __init__(
         self,
-        registry: AgentRegistry,
         max_tool_rounds: int = 10,
         max_result_length: int = 4000,
     ):
-        self.registry = registry
         self.max_tool_rounds = max_tool_rounds
         self.max_result_length = max_result_length
 
@@ -84,14 +81,13 @@ class AgentRunner:
         else:
             messages.append({"role": "user", "content": task})
 
-        # 5. 按需连接 MCP server，同步 delegate 深度，然后构建工具列表
+        # 5. 按需连接 MCP server，然后构建工具列表
         tool_router = getattr(context.deps, "tool_router", None)
         if tool_router:
             if agent.tools:
                 await tool_router.ensure_tools(agent.tools)
-            tool_router.set_delegate_depth(context.delegate_depth)
         tools = self._build_tools(agent, context)
-        handoff_tools = self._build_handoff_tools(agent)
+        handoff_tools = self._build_handoff_tools(agent, context)
         all_tools = tools + handoff_tools
         if not all_tools:
             all_tools = None
@@ -166,7 +162,7 @@ class AgentRunner:
 
                 tool_router = getattr(context.deps, "tool_router", None)
                 if tool_router:
-                    result_text = await tool_router.route(tool_name, args)
+                    result_text = await tool_router.route(tool_name, args, context)
                 else:
                     result_text = "Error: no tool_router in deps"
 
@@ -230,11 +226,12 @@ class AgentRunner:
             allowed = {name for name in allowed if not name.startswith("delegate_")}
         return [s for s in all_schemas if s["function"]["name"] in allowed]
 
-    def _build_handoff_tools(self, agent: Agent) -> list[dict]:
+    def _build_handoff_tools(self, agent: Agent, context: RunContext) -> list[dict]:
         """为 agent.handoffs 生成 transfer_to_<name> 工具。"""
         tools = []
+        registry = getattr(context.deps, "agent_registry", None)
         for target_name in agent.handoffs:
-            target = self.registry.get(target_name)
+            target = registry.get(target_name) if registry else None
             description = target.description if target else target_name
             tools.append({
                 "type": "function",

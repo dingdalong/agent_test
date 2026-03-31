@@ -73,7 +73,7 @@ async def test_delegate_end_to_end(resolver, registry):
 
     mock_llm.chat = mock_chat
 
-    runner = AgentRunner(registry=registry)
+    runner = AgentRunner()
     router = ToolRouter()
 
     delegate_provider = DelegateToolProvider(
@@ -115,7 +115,7 @@ async def test_delegated_agent_cannot_delegate_further(resolver, registry):
 
     mock_llm.chat = mock_chat
 
-    runner = AgentRunner(registry=registry)
+    runner = AgentRunner()
     router = ToolRouter()
 
     deps = AgentDeps(llm=mock_llm, tool_router=router)

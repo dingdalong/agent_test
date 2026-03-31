@@ -115,7 +115,7 @@ class PlanCompiler:
     def __init__(self, agent_registry: AgentRegistry, tool_router: ToolRouter):
         self._registry = agent_registry
         self._router = tool_router
-        self._runner = AgentRunner(registry=agent_registry)
+        self._runner = AgentRunner()
 
     def compile(self, plan: Plan) -> CompiledGraph:
         """Plan -> CompiledGraph。

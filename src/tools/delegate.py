@@ -22,6 +22,42 @@ if TYPE_CHECKING:
 
 DELEGATE_PREFIX = "delegate_"
 
+DELEGATE_DESCRIPTION_TEMPLATE = (
+    "委托任务给{description}专家。"
+    "请基于当前对话上下文，清晰完整地填写以下字段，"
+    "确保对方无需额外信息就能执行任务。"
+)
+
+RECEIVING_TEMPLATE = (
+    "你收到了一个委托任务：\n"
+    "最终目标：{objective}\n"
+    "具体任务：{task}\n"
+    "{context_line}"
+    "{expected_result_line}"
+    "\n"
+    "完成后请按以下格式返回：\n"
+    "第一行标注任务状态：已完成 / 信息不足 / 失败\n"
+    "之后是具体结果或需要补充的信息。\n"
+    "不要猜测或假设缺失的信息。"
+)
+
+
+def _build_receiving_input(
+    objective: str,
+    task: str,
+    context: str | None = None,
+    expected_result: str | None = None,
+) -> str:
+    """用接收方模板组装委托任务的 input 文本。"""
+    context_line = f"相关上下文：{context}\n" if context else ""
+    expected_result_line = f"期望结果：{expected_result}\n" if expected_result else ""
+    return RECEIVING_TEMPLATE.format(
+        objective=objective,
+        task=task,
+        context_line=context_line,
+        expected_result_line=expected_result_line,
+    )
+
 
 class DelegateToolProvider:
     """将 Tool Agent 包装为可调用工具的 ToolProvider。

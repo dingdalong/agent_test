@@ -207,3 +207,52 @@ async def test_execute_propagates_parent_delegate_depth():
     call_args = test_runner.run.call_args
     sub_ctx = call_args[0][1]
     assert sub_ctx.delegate_depth == 2
+
+
+def test_build_receiving_input_all_fields():
+    """所有字段都有值时，接收方 input 包含全部信息。"""
+    from src.tools.delegate import _build_receiving_input
+
+    result = _build_receiving_input(
+        objective="判断明天是否适合去故宫",
+        task="查询北京明天天气",
+        context="用户计划明天去故宫",
+        expected_result="天气状况、温度、出行建议",
+    )
+    assert "最终目标：判断明天是否适合去故宫" in result
+    assert "具体任务：查询北京明天天气" in result
+    assert "相关上下文：用户计划明天去故宫" in result
+    assert "期望结果：天气状况、温度、出行建议" in result
+    assert "不要猜测或假设" in result
+    assert "已完成 / 信息不足 / 失败" in result
+
+
+def test_build_receiving_input_optional_fields_missing():
+    """可选字段为空时，不显示对应行。"""
+    from src.tools.delegate import _build_receiving_input
+
+    result = _build_receiving_input(
+        objective="帮用户查天气",
+        task="查询天气预报",
+        context=None,
+        expected_result=None,
+    )
+    assert "最终目标：帮用户查天气" in result
+    assert "具体任务：查询天气预报" in result
+    assert "相关上下文" not in result
+    assert "期望结果" not in result
+    assert "不要猜测或假设" in result
+
+
+def test_build_receiving_input_empty_string_treated_as_missing():
+    """空字符串应与 None 同样处理，不显示对应行。"""
+    from src.tools.delegate import _build_receiving_input
+
+    result = _build_receiving_input(
+        objective="目标",
+        task="任务",
+        context="",
+        expected_result="",
+    )
+    assert "相关上下文" not in result
+    assert "期望结果" not in result

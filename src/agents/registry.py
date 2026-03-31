@@ -53,12 +53,25 @@ class AgentRegistry:
         # 尝试从 CategoryResolver 懒加载
         if self._category_resolver and self._category_resolver.can_resolve(name):
             cat = self._category_resolver.get_category(name)
-            instructions = self._category_resolver.build_instructions(name)
+
+            # 收集其他分类的 delegate 工具名和摘要
+            delegate_names = self._category_resolver.get_delegate_names(exclude=name)
+            delegate_summaries = [
+                s for s in self._category_resolver.get_all_summaries()
+                if s["name"] != name
+            ]
+
+            instructions = self._category_resolver.build_instructions(
+                name, delegate_summaries=delegate_summaries,
+            )
+
+            tools = list(cat["tools"].keys()) + delegate_names  # type: ignore[index]
+
             agent = Agent(
                 name=name,
                 description=cat["description"],  # type: ignore[index]
                 instructions=instructions,
-                tools=list(cat["tools"].keys()),  # type: ignore[index]
+                tools=tools,
                 handoffs=[],
             )
             self.register(agent)

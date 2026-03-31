@@ -89,6 +89,10 @@ class AgentRunner:
             tool_router = getattr(context.deps, "tool_router", None)
             if tool_router:
                 await tool_router.ensure_tools(agent.tools)
+        # 同步 delegate 深度到 tool_router，供 DelegateToolProvider 使用
+        tool_router = getattr(context.deps, "tool_router", None)
+        if tool_router and hasattr(tool_router, "set_delegate_depth"):
+            tool_router.set_delegate_depth(context.delegate_depth)
         tools = self._build_tools(agent, context)
         handoff_tools = self._build_handoff_tools(agent)
         all_tools = tools + handoff_tools
@@ -214,12 +218,20 @@ class AgentRunner:
         return result
 
     def _build_tools(self, agent: Agent, context: RunContext) -> list[dict]:
-        """从 deps.tool_router 过滤 agent 允许的工具。"""
+        """从 deps.tool_router 过滤 agent 允许的工具。
+
+        当 context.delegate_depth >= 1 时，过滤掉所有 delegate_ 前缀的工具，
+        防止被委派的 agent 再次委派（递归深度限制）。
+        """
         tool_router = getattr(context.deps, "tool_router", None)
         if not tool_router or not agent.tools:
             return []
         all_schemas = tool_router.get_all_schemas()
-        return [s for s in all_schemas if s["function"]["name"] in agent.tools]
+        allowed = set(agent.tools)
+        # 委派深度 >= 1 时，移除所有 delegate 工具
+        if context.delegate_depth >= 1:
+            allowed = {name for name in allowed if not name.startswith("delegate_")}
+        return [s for s in all_schemas if s["function"]["name"] in allowed]
 
     def _build_handoff_tools(self, agent: Agent) -> list[dict]:
         """为 agent.handoffs 生成 transfer_to_<name> 工具。"""

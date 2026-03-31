@@ -190,3 +190,91 @@ async def test_runner_dynamic_instructions(mock_router, mock_llm):
 
     messages = mock_llm.chat.call_args[0][0]
     assert "Handle input: test input" in messages[0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_runner_sets_delegate_depth_on_router(mock_llm):
+    """runner 应在工具调用前将 context.delegate_depth 同步到 tool_router。"""
+    from src.agents.runner import AgentRunner
+
+    mock_llm.chat = AsyncMock(side_effect=[
+        LLMResponse(
+            content="",
+            tool_calls={0: {"id": "call_1", "name": "delegate_tool_calc", "arguments": '{"task": "1+1"}'}},
+        ),
+        LLMResponse(content="2", tool_calls={}),
+    ])
+
+    mock_router = AsyncMock()
+    mock_router.route = AsyncMock(return_value="2")
+    mock_router.get_all_schemas = MagicMock(return_value=[
+        {
+            "type": "function",
+            "function": {
+                "name": "delegate_tool_calc",
+                "description": "委派任务给计算专家",
+                "parameters": {"type": "object", "properties": {"task": {"type": "string"}}, "required": ["task"]},
+            },
+        }
+    ])
+
+    agent = Agent(
+        name="tool_terminal",
+        description="终端操作",
+        instructions="终端专家。",
+        tools=["delegate_tool_calc"],
+    )
+    ctx = RunContext(
+        input="calculate 1+1",
+        state=DynamicState(),
+        deps=AgentDeps(llm=mock_llm, tool_router=mock_router),
+        delegate_depth=0,
+    )
+
+    runner = AgentRunner(registry=AgentRegistry())
+    await runner.run(agent, ctx)
+
+    assert mock_router.set_delegate_depth.called
+    mock_router.set_delegate_depth.assert_called_with(0)
+
+
+def test_build_tools_includes_delegates_at_depth_0():
+    """delegate_depth=0 时，_build_tools 应包含 delegate 工具。"""
+    from src.agents.runner import AgentRunner
+
+    mock_router = MagicMock()
+    mock_router.get_all_schemas = MagicMock(return_value=[
+        {"type": "function", "function": {"name": "exec", "description": "Execute", "parameters": {}}},
+        {"type": "function", "function": {"name": "delegate_tool_calc", "description": "委派计算", "parameters": {}}},
+    ])
+
+    agent = Agent(name="test", description="Test", instructions="Test.", tools=["exec", "delegate_tool_calc"])
+    ctx = RunContext(input="test", state=DynamicState(), deps=AgentDeps(tool_router=mock_router), delegate_depth=0)
+
+    runner = AgentRunner(registry=AgentRegistry())
+    tools = runner._build_tools(agent, ctx)
+
+    names = [t["function"]["name"] for t in tools]
+    assert "exec" in names
+    assert "delegate_tool_calc" in names
+
+
+def test_build_tools_excludes_delegates_at_depth_1():
+    """delegate_depth>=1 时，_build_tools 应过滤掉所有 delegate 工具。"""
+    from src.agents.runner import AgentRunner
+
+    mock_router = MagicMock()
+    mock_router.get_all_schemas = MagicMock(return_value=[
+        {"type": "function", "function": {"name": "exec", "description": "Execute", "parameters": {}}},
+        {"type": "function", "function": {"name": "delegate_tool_calc", "description": "委派计算", "parameters": {}}},
+    ])
+
+    agent = Agent(name="test", description="Test", instructions="Test.", tools=["exec", "delegate_tool_calc"])
+    ctx = RunContext(input="test", state=DynamicState(), deps=AgentDeps(tool_router=mock_router), delegate_depth=1)
+
+    runner = AgentRunner(registry=AgentRegistry())
+    tools = runner._build_tools(agent, ctx)
+
+    names = [t["function"]["name"] for t in tools]
+    assert "exec" in names
+    assert "delegate_tool_calc" not in names

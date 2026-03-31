@@ -148,3 +148,62 @@ async def test_execute_no_mcp_manager_still_works():
     )
     result = await provider.execute("delegate_tool_calc", {"task": "1+1"})
     assert result == "42"
+
+
+@pytest.mark.asyncio
+async def test_execute_propagates_delegate_depth():
+    """execute 创建的子 RunContext 应将 delegate_depth 递增。"""
+    from src.tools.delegate import DelegateToolProvider
+    from src.agents.agent import AgentResult
+
+    cats = {
+        "tool_terminal": {"description": "终端操作", "tools": {"exec": "Execute"}},
+    }
+    test_resolver = CategoryResolver(cats)
+    test_registry = AgentRegistry()
+    test_registry.set_category_resolver(test_resolver)
+    test_runner = AsyncMock()
+    test_runner.run = AsyncMock(return_value=AgentResult(text="done"))
+    test_deps = AgentDeps()
+
+    provider = DelegateToolProvider(
+        resolver=test_resolver,
+        runner=test_runner,
+        registry=test_registry,
+        deps=test_deps,
+    )
+    await provider.execute("delegate_tool_terminal", {"task": "run ls"})
+
+    call_args = test_runner.run.call_args
+    sub_ctx = call_args[0][1]
+    assert sub_ctx.delegate_depth == 1
+
+
+@pytest.mark.asyncio
+async def test_execute_propagates_parent_delegate_depth():
+    """当 _current_delegate_depth 已非零时，子 RunContext 应继续递增。"""
+    from src.tools.delegate import DelegateToolProvider
+    from src.agents.agent import AgentResult
+
+    cats = {
+        "tool_terminal": {"description": "终端操作", "tools": {"exec": "Execute"}},
+    }
+    test_resolver = CategoryResolver(cats)
+    test_registry = AgentRegistry()
+    test_registry.set_category_resolver(test_resolver)
+    test_runner = AsyncMock()
+    test_runner.run = AsyncMock(return_value=AgentResult(text="done"))
+    test_deps = AgentDeps()
+
+    provider = DelegateToolProvider(
+        resolver=test_resolver,
+        runner=test_runner,
+        registry=test_registry,
+        deps=test_deps,
+    )
+    provider._current_delegate_depth = 1
+    await provider.execute("delegate_tool_terminal", {"task": "run ls"})
+
+    call_args = test_runner.run.call_args
+    sub_ctx = call_args[0][1]
+    assert sub_ctx.delegate_depth == 2

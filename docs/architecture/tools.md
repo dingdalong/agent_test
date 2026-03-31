@@ -11,9 +11,11 @@
 ```python
 class ToolProvider(Protocol):
     def can_handle(self, tool_name: str) -> bool: ...
-    async def execute(self, tool_name: str, arguments: dict) -> str: ...
+    async def execute(self, tool_name: str, arguments: dict, context: Any = None) -> str: ...
     def get_schemas(self) -> list[ToolDict]: ...
 ```
+
+`context` 参数携带当前 `RunContext`，用于需要访问运行时环境（如 `deps`）的 provider（例如 `DelegateToolProvider`）。不需要上下文的 provider 忽略该参数即可。
 
 四种实现：
 - `LocalToolProvider` — 本地 @tool 装饰器注册的工具
@@ -24,6 +26,8 @@ class ToolProvider(Protocol):
 ### ToolRouter（`src/tools/router.py`）
 
 按注册顺序查询 provider，找到第一个 `can_handle` 返回 `True` 的执行。聚合所有 provider 的 schema 供 LLM 使用。
+
+`route(name, args, context)` 接受可选的 `context` 参数，并原样透传给 `provider.execute()`，使下游 provider 能访问运行时状态。`set_delegate_depth()` 方法已移除 — 委派深度通过 `context.delegate_depth` 字段流转。
 
 ### @tool 装饰器（`src/tools/decorator.py`）
 
@@ -97,7 +101,19 @@ uv run python -m src.tools.classify --force  # 强制重分类所有工具
 
 ### DelegateToolProvider（`src/tools/delegate.py`）
 
-将 Tool Agent 包装为标准 ToolProvider，对外暴露 `delegate_<agent_name>(task=...)` 形式的工具。MCP 按需连接由 `AgentRunner.run()` 统一触发：在构建工具列表前调用 `ToolRouter.ensure_tools(agent.tools)`，通知 `MCPToolProvider` 连接所需 server，确保 handoff 和 delegate 两种调用方式都能正确获取 MCP 工具 schema。两种调用方式：
+将 Tool Agent 包装为标准 ToolProvider，对外暴露结构化委托工具 `delegate_<agent_name>(objective, task, context?, expected_result?)`。
+
+构造函数只接受 `resolver` 和可选的 `mcp_manager`，不持有 `registry` 或 `runner`：
+
+```python
+DelegateToolProvider(resolver: CategoryResolver, mcp_manager: MCPManager | None = None)
+```
+
+`execute()` 在运行时从 `context.deps` 中读取所需依赖：
+- `context.deps.agent_registry` — 查找目标 Agent
+- `context.deps.runner` — 驱动子 Agent 执行
+
+委派深度通过 `context.delegate_depth` 传递给子 `RunContext`（`delegate_depth + 1`），不再通过 `set_delegate_depth()` 设置。MCP 按需连接由 `AgentRunner.run()` 统一触发：在构建工具列表前调用 `ToolRouter.ensure_tools(agent.tools)`，通知 `MCPToolProvider` 连接所需 server，确保 handoff 和 delegate 两种调用方式都能正确获取 MCP 工具 schema。两种调用方式：
 
 - **handoff**：主 Agent 将控制权完全移交给 Tool Agent，适合长流程子任务
 - **delegate tool**：主 Agent 通过工具调用方式委托，Tool Agent 返回结果后主 Agent 继续
@@ -110,10 +126,12 @@ AgentRunner.run(agent, context)
   → ToolRouter.get_all_schemas() → 过滤 agent.tools → LLM 可见工具列表
   → LLM 返回 tool_calls
   → AgentRunner 解析
-  → ToolRouter.route(name, args)
+  → ToolRouter.route(name, args, context)        # context 原样透传
     → provider.can_handle(name)?
-      → LocalToolProvider: middleware → executor → 工具函数
-      → MCPToolProvider: MCP 协议调用
-      → DelegateToolProvider: 创建子 RunContext → AgentRunner 驱动子 Agent
+      → LocalToolProvider: middleware → executor → 工具函数（context 忽略）
+      → MCPToolProvider: MCP 协议调用（context 忽略）
+      → DelegateToolProvider: 从 context.deps 取 registry/runner
+          → 创建子 RunContext（delegate_depth + 1）
+          → runner.run(sub_agent, sub_ctx)
   → 结果返回 AgentRunner → 加入消息 → 继续 LLM 对话
 ```

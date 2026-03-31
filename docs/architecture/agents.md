@@ -30,13 +30,22 @@ class Agent:
 4. 如果 LLM 返回文本 → 运行输出守卫 → 返回结果
 5. 达到 `max_tool_rounds` → 强制结束
 
+`AgentRunner` 构造时只接受配置参数（`max_tool_rounds`, `max_result_length`），不持有 `registry`。运行时从 `context.deps.agent_registry` 读取 registry，用于构建 handoff 工具和查找目标 Agent。
+
 ### AgentRegistry（`src/agents/registry.py`）
 
 名称 → Agent 的映射表。AgentRunner 通过 registry 查找 handoff 目标。
 
 ### AgentNode（`src/agents/node.py`）
 
-将 Agent + AgentRunner 适配为 `GraphNode` Protocol，使智能体可以作为图节点参与图执行。
+将 Agent 适配为 `GraphNode` Protocol，使智能体可以作为图节点参与图执行。构造时只持有 `agent`，不绑定 `runner`；执行时从 `context.deps.runner` 读取 runner：
+
+```python
+async def execute(self, context: Any) -> NodeResult:
+    runner = context.deps.runner   # 运行时从 deps 读取
+    result = await runner.run(self.agent, context)
+    ...
+```
 
 ### RunContext（`src/agents/context.py`）
 
@@ -50,6 +59,14 @@ class Agent:
 
 依赖注入容器，持有所有共享组件的引用：
 - `llm`, `tool_router`, `agent_registry`, `graph_engine`, `ui`, `memory`（可选）
+- `runner` — `AgentRunner` 实例，供 `AgentNode` 和 `DelegateToolProvider` 在运行时读取
+
+## 设计原则
+
+**构造时绑定只读配置，运行时从 context 取环境。**
+
+- `AgentNode`、`DelegateToolProvider` 等组件构造时只接受静态配置（如 `agent`、`resolver`），不在构造期注入 `runner`、`registry` 等运行时依赖。
+- 运行时依赖统一通过 `context.deps` 传递，保持组件的可测试性和低耦合。
 
 ## 预设智能体（`src/app/presets.py`）
 

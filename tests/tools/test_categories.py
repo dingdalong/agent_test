@@ -308,8 +308,8 @@ def test_category_resolver_build_instructions_without_delegates():
     assert "协作能力" not in instructions
 
 
-def test_category_resolver_build_instructions_custom_ignores_delegates():
-    """有自定义 instructions 时，delegate_summaries 不影响结果。"""
+def test_category_resolver_build_instructions_custom_appends_delegates():
+    """有自定义 instructions 时，delegate_summaries 追加到末尾。"""
     from src.tools.categories import CategoryResolver
 
     cats = {
@@ -324,4 +324,21 @@ def test_category_resolver_build_instructions_custom_ignores_delegates():
         "tool_terminal",
         delegate_summaries=[{"name": "tool_calc", "description": "计算"}],
     )
-    assert instructions == "自定义指令"
+    assert instructions.startswith("自定义指令")
+    assert "协作能力" in instructions
+    assert "delegate_tool_calc" in instructions
+
+
+def test_category_resolver_build_instructions_custom_no_delegates():
+    """有自定义 instructions 但无 delegate_summaries 时，只返回自定义指令。"""
+    from src.tools.categories import CategoryResolver
+
+    cats = {
+        "tool_terminal": {
+            "description": "终端操作",
+            "tools": {"exec": "Execute"},
+            "instructions": "自定义指令",
+        }
+    }
+    resolver = CategoryResolver(cats)
+    assert resolver.build_instructions("tool_terminal") == "自定义指令"

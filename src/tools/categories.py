@@ -184,11 +184,25 @@ class CategoryResolver:
         例如 exclude="tool_terminal" 时，返回
         ["delegate_tool_calc", "delegate_tool_files", ...]。
         """
-        return [
+        return sorted(
             f"delegate_{name}"
             for name in self._categories
             if name != exclude
-        ]
+        )
+
+    def get_delegate_info(self, exclude: str) -> tuple[list[str], list[dict[str, str]]]:
+        """一次遍历返回除 exclude 外的 (delegate 工具名列表, 摘要列表)。
+
+        避免 get_delegate_names + get_all_summaries 的重复遍历。
+        """
+        names: list[str] = []
+        summaries: list[dict[str, str]] = []
+        for name, cat in sorted(self._categories.items()):
+            if name == exclude:
+                continue
+            names.append(f"delegate_{name}")
+            summaries.append({"name": name, "description": cat["description"]})
+        return names, summaries
 
     def build_instructions(
         self,
@@ -205,8 +219,19 @@ class CategoryResolver:
             KeyError: agent_name 不在已知类别中。
         """
         cat = self._categories[agent_name]
-        if cat.get("instructions"):
-            return cat["instructions"]
+        custom = cat.get("instructions")
+        if custom:
+            # 自定义指令存在时，追加协作能力段落（如有）
+            if delegate_summaries:
+                lines = [
+                    f"- delegate_{s['name']}: {s['description']}专家"
+                    for s in delegate_summaries
+                ]
+                delegate_section = _DELEGATE_SECTION_TEMPLATE.format(
+                    delegate_descriptions="\n".join(lines),
+                )
+                return f"{custom}\n\n{delegate_section}"
+            return custom
 
         delegate_section = ""
         if delegate_summaries:

@@ -54,12 +54,10 @@ class AgentRegistry:
         if self._category_resolver and self._category_resolver.can_resolve(name):
             cat = self._category_resolver.get_category(name)
 
-            # 收集其他分类的 delegate 工具名和摘要
-            delegate_names = self._category_resolver.get_delegate_names(exclude=name)
-            delegate_summaries = [
-                s for s in self._category_resolver.get_all_summaries()
-                if s["name"] != name
-            ]
+            # 一次遍历获取其他分类的 delegate 工具名和摘要
+            delegate_names, delegate_summaries = (
+                self._category_resolver.get_delegate_info(exclude=name)
+            )
 
             instructions = self._category_resolver.build_instructions(
                 name, delegate_summaries=delegate_summaries,

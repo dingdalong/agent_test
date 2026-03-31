@@ -82,7 +82,12 @@ class DelegateToolProvider:
         return schemas
 
     async def execute(self, tool_name: str, arguments: dict[str, Any]) -> str:
-        """委派执行：按需连接 MCP server，创建子 RunContext 并驱动 AgentRunner。"""
+        """委派执行：按需连接 MCP server，创建子 RunContext 并驱动 AgentRunner。
+
+        注意：子 RunContext 与父级共享同一 deps（含 tool_router）。
+        当前 AgentRunner 串行执行工具调用，因此不存在并发问题。
+        若未来支持并行工具调用，需要为每次 delegate 创建独立的 deps 副本。
+        """
         from src.agents.context import DynamicState, RunContext
 
         agent_name = tool_name[len(DELEGATE_PREFIX):]

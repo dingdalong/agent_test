@@ -66,15 +66,15 @@ def test_get_schemas(provider):
 @pytest.mark.asyncio
 async def test_execute_delegates_to_runner(provider, mock_runner):
     from src.agents.agent import AgentResult
-    mock_runner.run = AsyncMock(return_value=AgentResult(text="执行完成"))
+    mock_runner.run = AsyncMock(return_value=AgentResult(text="已完成\n执行完成"))
     result = await provider.execute("delegate_tool_terminal", {"task": "列出当前目录"})
-    assert result == "执行完成"
+    assert "执行完成" in result
     mock_runner.run.assert_called_once()
     call_args = mock_runner.run.call_args
     agent = call_args[0][0]
     assert agent.name == "tool_terminal"
     ctx = call_args[0][1]
-    assert ctx.input == "列出当前目录"
+    assert "具体任务：列出当前目录" in ctx.input
 
 
 @pytest.mark.asyncio
@@ -280,3 +280,56 @@ def test_get_schemas_description_uses_template(provider):
     terminal_schema = next(s for s in schemas if s["function"]["name"] == "delegate_tool_terminal")
     desc = terminal_schema["function"]["description"]
     assert "确保对方无需额外信息就能执行任务" in desc
+
+
+@pytest.mark.asyncio
+async def test_execute_builds_structured_input(provider, mock_runner):
+    """execute 应用接收方模板组装 input，包含 objective/task/context/expected_result。"""
+    from src.agents.agent import AgentResult
+
+    mock_runner.run = AsyncMock(return_value=AgentResult(text="已完成\n结果"))
+    await provider.execute("delegate_tool_terminal", {
+        "objective": "帮用户管理文件",
+        "task": "列出当前目录",
+        "context": "用户在 /home/user 目录下",
+        "expected_result": "文件列表",
+    })
+
+    call_args = mock_runner.run.call_args
+    ctx = call_args[0][1]
+    assert "最终目标：帮用户管理文件" in ctx.input
+    assert "具体任务：列出当前目录" in ctx.input
+    assert "相关上下文：用户在 /home/user 目录下" in ctx.input
+    assert "期望结果：文件列表" in ctx.input
+
+
+@pytest.mark.asyncio
+async def test_execute_optional_fields_omitted(provider, mock_runner):
+    """只传 objective 和 task 时，input 不包含 context 和 expected_result 行。"""
+    from src.agents.agent import AgentResult
+
+    mock_runner.run = AsyncMock(return_value=AgentResult(text="已完成\n结果"))
+    await provider.execute("delegate_tool_terminal", {
+        "objective": "查天气",
+        "task": "查询天气预报",
+    })
+
+    call_args = mock_runner.run.call_args
+    ctx = call_args[0][1]
+    assert "最终目标：查天气" in ctx.input
+    assert "具体任务：查询天气预报" in ctx.input
+    assert "相关上下文" not in ctx.input
+    assert "期望结果" not in ctx.input
+
+
+@pytest.mark.asyncio
+async def test_execute_backward_compat_task_only(provider, mock_runner):
+    """兼容旧格式：只传 task 时，objective 用 task 兜底。"""
+    from src.agents.agent import AgentResult
+
+    mock_runner.run = AsyncMock(return_value=AgentResult(text="已完成\n42"))
+    await provider.execute("delegate_tool_terminal", {"task": "计算 1+1"})
+
+    call_args = mock_runner.run.call_args
+    ctx = call_args[0][1]
+    assert "具体任务：计算 1+1" in ctx.input

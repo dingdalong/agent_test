@@ -149,8 +149,20 @@ class DelegateToolProvider:
             if mcp_tools:
                 await self._mcp_manager.ensure_servers_for_tools(mcp_tools)
 
+        # 从结构化参数构建接收方 input
+        task = arguments.get("task", "")
+        objective = arguments.get("objective", task)
+        context = arguments.get("context")
+        expected_result = arguments.get("expected_result")
+        receiving_input = _build_receiving_input(
+            objective=objective,
+            task=task,
+            context=context,
+            expected_result=expected_result,
+        )
+
         sub_ctx: RunContext = RunContext(
-            input=arguments.get("task", ""),
+            input=receiving_input,
             state=DynamicState(),
             deps=self._deps,
             delegate_depth=self._delegate_depth + 1,

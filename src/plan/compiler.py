@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import replace
 from typing import Any
 
 from src.plan.models import Plan, Step
@@ -12,7 +11,6 @@ from src.agents.context import RunContext, DynamicState
 from src.graph.types import FunctionNode, NodeResult, CompiledGraph, Edge, ParallelGroup
 from src.graph.builder import GraphBuilder
 from src.agents.registry import AgentRegistry
-from src.agents.runner import AgentRunner
 from src.tools.router import ToolRouter
 
 logger = logging.getLogger(__name__)
@@ -115,7 +113,6 @@ class PlanCompiler:
     def __init__(self, agent_registry: AgentRegistry, tool_router: ToolRouter):
         self._registry = agent_registry
         self._router = tool_router
-        self._runner = AgentRunner()
 
     def compile(self, plan: Plan) -> CompiledGraph:
         """Plan -> CompiledGraph。
@@ -191,22 +188,27 @@ class PlanCompiler:
 
         async def fn(ctx: RunContext) -> NodeResult:
             resolved = resolve_variables(tool_args, _state_to_dict(ctx.state))
-            result = await router.route(tool_name, resolved)
+            result = await router.route(tool_name, resolved, ctx)
             return NodeResult(output=result)
 
         return fn
 
     def _make_agent_fn(self, step: Step):
-        """Agent 步骤 -> 闭包函数。"""
+        """Agent 步骤 -> 闭包函数。运行时从 ctx.deps 获取 registry 和 runner。"""
         agent_name = step.agent_name
         agent_prompt = step.agent_prompt or step.description
-        registry = self._registry
-        runner = self._runner
 
         async def fn(ctx: RunContext) -> NodeResult:
             resolved_prompt = resolve_variables(agent_prompt, _state_to_dict(ctx.state))
+            registry = ctx.deps.agent_registry
+            runner = ctx.deps.runner
             agent = registry.get(agent_name)
-            agent_ctx = replace(ctx, input=resolved_prompt)
+            agent_ctx = RunContext(
+                input=resolved_prompt,
+                state=ctx.state,
+                deps=ctx.deps,
+                delegate_depth=ctx.delegate_depth,
+            )
             result = await runner.run(agent, agent_ctx)
             return NodeResult(output={"text": result.text, "data": result.data}, handoff=result.handoff)
 

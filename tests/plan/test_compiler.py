@@ -194,7 +194,7 @@ class TestPlanCompilerExecution:
         ctx = RunContext(input="test", state=DynamicState(), deps=TestDeps(tool_router=router))
         result = await engine.run(graph, ctx)
 
-        router.route.assert_called_once_with("get_weather", {"location": "广州"})
+        router.route.assert_called_once_with("get_weather", {"location": "广州"}, ctx)
         assert result.output == "晴天 25°C"
 
     async def test_variable_resolution_during_execution(self):
@@ -202,7 +202,7 @@ class TestPlanCompilerExecution:
         registry, router = _make_registry_and_router()
 
         call_count = 0
-        async def mock_route(tool_name, args):
+        async def mock_route(tool_name, args, context=None):
             nonlocal call_count
             call_count += 1
             if call_count == 1:

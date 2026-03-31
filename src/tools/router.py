@@ -1,7 +1,7 @@
 """ToolProvider 协议 + ToolRouter 统一路由 + LocalToolProvider。"""
 
 import logging
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from .executor import ToolExecutor
 from .middleware import Middleware, NextFn, build_pipeline
@@ -23,7 +23,7 @@ class ToolProvider(Protocol):
     """
 
     def can_handle(self, tool_name: str) -> bool: ...
-    async def execute(self, tool_name: str, arguments: dict) -> str: ...
+    async def execute(self, tool_name: str, arguments: dict, context: Any = None) -> str: ...
     def get_schemas(self) -> list[ToolDict]: ...
 
 
@@ -36,10 +36,10 @@ class ToolRouter:
     def add_provider(self, provider: ToolProvider) -> None:
         self._providers.append(provider)
 
-    async def route(self, tool_name: str, arguments: dict) -> str:
+    async def route(self, tool_name: str, arguments: dict, context: Any = None) -> str:
         for provider in self._providers:
             if provider.can_handle(tool_name):
-                return await provider.execute(tool_name, arguments)
+                return await provider.execute(tool_name, arguments, context)
         return f"错误：未找到工具 '{tool_name}'"
 
     async def ensure_tools(self, tool_names: list[str]) -> None:
@@ -53,12 +53,6 @@ class ToolRouter:
         for provider in self._providers:
             schemas.extend(provider.get_schemas())
         return schemas
-
-    def set_delegate_depth(self, depth: int) -> None:
-        """同步 delegate 深度到 DelegateToolProvider。"""
-        for provider in self._providers:
-            if hasattr(provider, "set_delegate_depth"):
-                provider.set_delegate_depth(depth)
 
     def is_sensitive(self, tool_name: str) -> bool:
         for provider in self._providers:
@@ -84,7 +78,7 @@ class LocalToolProvider:
     def can_handle(self, tool_name: str) -> bool:
         return self.registry.has(tool_name)
 
-    async def execute(self, tool_name: str, arguments: dict) -> str:
+    async def execute(self, tool_name: str, arguments: dict, context: Any = None) -> str:
         return await self._pipeline(tool_name, arguments)
 
     def get_schemas(self) -> list[ToolDict]:

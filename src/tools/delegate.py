@@ -1,7 +1,10 @@
 """DelegateToolProvider — 将 Tool Agent 包装为可调用工具。
 
-业务 Agent 可通过 delegate_tool_<name>(task="...") 调用对应的
-Tool Agent，内部创建子 RunContext 并驱动 AgentRunner 执行。
+业务 Agent 可通过 delegate_<name>(objective, task, context?, expected_result?)
+调用对应的 Tool Agent。委托时通过结构化的四字段 schema 强制发送方说清楚
+任务意图，接收方通过 prompt 模板获得完整的任务上下文。
+
+协议设计详见 docs/superpowers/specs/2026-03-31-structured-delegation-protocol-design.md
 
 本模块位于 Layer 1（src/tools/），对 Layer 2 的依赖
 （AgentRunner、AgentRegistry、AgentDeps）仅在 TYPE_CHECKING
@@ -49,8 +52,8 @@ def _build_receiving_input(
     expected_result: str | None = None,
 ) -> str:
     """用接收方模板组装委托任务的 input 文本。"""
-    context_line = f"相关上下文：{context}\n" if context else ""
-    expected_result_line = f"期望结果：{expected_result}\n" if expected_result else ""
+    context_line = f"相关上下文：{context}\n" if context and context.strip() else ""
+    expected_result_line = f"期望结果：{expected_result}\n" if expected_result and expected_result.strip() else ""
     return RECEIVING_TEMPLATE.format(
         objective=objective,
         task=task,

@@ -259,6 +259,20 @@ def test_build_receiving_input_empty_string_treated_as_missing():
     assert "期望结果" not in result
 
 
+def test_build_receiving_input_whitespace_only_treated_as_missing():
+    """纯空白字符串应与 None 同样处理。"""
+    from src.tools.delegate import _build_receiving_input
+
+    result = _build_receiving_input(
+        objective="目标",
+        task="任务",
+        context="   ",
+        expected_result="  \t  ",
+    )
+    assert "相关上下文" not in result
+    assert "期望结果" not in result
+
+
 def test_get_schemas_has_structured_fields(provider):
     """schema 应包含 objective/task/context/expected_result 四个字段。"""
     schemas = provider.get_schemas()

@@ -19,6 +19,7 @@ from src.app.presets import build_skill_graph
 if TYPE_CHECKING:
     from src.memory.buffer import ConversationBuffer
     from src.memory.types import MemoryRecord
+    from src.tools.categories import CategoryResolver
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ class AgentApp:
         runner: AgentRunner,
         conversation_buffer: ConversationBuffer | None = None,
         category_summaries: list[dict[str, str]] | None = None,
+        category_resolver: CategoryResolver | None = None,
     ):
         self.deps = deps
         self.ui = ui
@@ -61,6 +63,7 @@ class AgentApp:
         self.runner = runner
         self.conversation_buffer = conversation_buffer
         self._category_summaries: list[dict[str, str]] = category_summaries or []
+        self._category_resolver = category_resolver
 
     async def process(self, user_input: str) -> None:
         """处理单条用户消息。"""
@@ -101,12 +104,15 @@ class AgentApp:
             return
         remaining = user_input[len(f"/{skill_name}"):].strip()
         actual_input = remaining or f"已激活 {skill_name} skill，请按指令执行。"
+
+        # 隔离的 registry，共享只读的 category_resolver
         skill_registry = AgentRegistry()
-        skill_runner = AgentRunner(registry=skill_registry)
+        if self._category_resolver:
+            skill_registry.set_category_resolver(self._category_resolver)
+
         skill_graph = build_skill_graph(
             skill_registry,
             skill_content,
-            runner=skill_runner,
             category_summaries=self._category_summaries,
         )
         skill_engine = GraphEngine()
@@ -120,6 +126,7 @@ class AgentApp:
                 graph_engine=skill_engine,
                 ui=self.ui,
                 memory=self.deps.memory,
+                runner=self.deps.runner,
             ),
         )
         result = await skill_engine.run(skill_graph, ctx)

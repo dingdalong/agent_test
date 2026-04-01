@@ -76,6 +76,7 @@ agent 间通信的统一输入。4 个语义字段强制发送方回答 WHY / WH
 
 ```python
 # src/graph/messages.py
+import uuid
 
 @dataclass
 class AgentMessage:
@@ -84,6 +85,7 @@ class AgentMessage:
     context: dict[str, Any] | str = ""                  # WITH：已知的相关信息（结构化 dict 或自然语言）
     expected_result: str | None = None                  # EXPECT：期望对方返回什么（对齐输出预期）
     sender: str | None = None                           # FROM：发送方 agent 名称
+    message_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])  # 唯一标识，用于关联请求与响应
 ```
 
 与现有 delegate schema 的字段一一对应：
@@ -146,6 +148,7 @@ class AgentResponse:
     data: dict[str, Any] = field(default_factory=dict)  # 结构化结果数据
     status: ResponseStatus = ResponseStatus.COMPLETED
     sender: str | None = None                           # 响应方 agent 名称
+    message_id: str = ""                                # 对应 AgentMessage.message_id，关联请求与响应
 ```
 
 ### 1.4 工具 schema 生成

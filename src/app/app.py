@@ -14,7 +14,6 @@ from src.tools.router import ToolRouter
 from src.skills.manager import SkillManager
 from src.mcp.manager import MCPManager
 from src.plan.flow import PlanFlow
-from src.app.presets import build_skill_graph
 
 if TYPE_CHECKING:
     from src.memory.buffer import ConversationBuffer
@@ -99,41 +98,60 @@ class AgentApp:
         await self.ui.display(f"\n{result}\n")
 
     async def _handle_skill(self, user_input: str, skill_name: str) -> None:
-        skill_content = self.skill_manager.activate(skill_name)
-        if not skill_content:
+        """通过 SkillWorkflowParser + WorkflowCompiler 执行 skill 工作流。"""
+        from src.skills.workflow_parser import SkillWorkflowParser
+        from src.skills.compiler import WorkflowCompiler
+        from src.agents.agent import Agent
+
+        # 1. 激活 skill
+        content = self.skill_manager.activate(skill_name)
+        if not content:
             return
         remaining = user_input[len(f"/{skill_name}"):].strip()
         actual_input = remaining or f"已激活 {skill_name} skill，请按指令执行。"
 
-        # 隔离的 registry，共享只读的 category_resolver
-        skill_registry = AgentRegistry()
-        if self._category_resolver:
-            skill_registry.set_category_resolver(self._category_resolver)
+        # 2. 解析 → WorkflowPlan
+        parser = SkillWorkflowParser()
+        workflow = parser.parse(content, skill_name)
 
-        skill_graph = build_skill_graph(
-            skill_registry,
-            skill_content,
-            category_summaries=self._category_summaries,
+        # 3. 定义 agent_factory
+        def make_step_agent(step_id: str, instructions: str) -> Agent:
+            return Agent(
+                name=f"step_{step_id}",
+                description=f"Workflow step: {step_id}",
+                instructions=instructions,
+                handoffs=[],
+            )
+
+        # 4. 编译 → CompiledGraph
+        compiler = WorkflowCompiler()
+        skill_graph = compiler.compile(
+            workflow,
+            agent_factory=make_step_agent,
+            skill_manager=self.skill_manager,
         )
+
+        # 5. 构建隔离的执行上下文
         skill_engine = GraphEngine()
         ctx = RunContext(
             input=actual_input,
             state=DynamicState(),
-            deps=AgentDeps(
-                llm=self.deps.llm,
-                tool_router=self.tool_router,
-                agent_registry=skill_registry,
-                graph_engine=skill_engine,
-                ui=self.ui,
-                memory=self.deps.memory,
-                runner=self.deps.runner,
-            ),
+            deps=self.deps,
         )
+
+        # 6. 执行
         result = await skill_engine.run(skill_graph, ctx)
+
+        # 7. 输出
         output = result.output
         if isinstance(output, dict):
-            output = output.get("text", str(output))
-        await self.ui.display(f"\n{output}\n")
+            text = output.get("text", str(output))
+        elif hasattr(output, "text"):
+            text = output.text
+        else:
+            text = str(output)
+
+        await self.ui.display(f"\n{text}\n")
 
     async def _handle_normal(self, user_input: str) -> None:
         state = AppState()

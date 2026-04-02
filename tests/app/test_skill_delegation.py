@@ -182,3 +182,37 @@ async def test_skill_mode_cross_agent_delegation(resolver):
     assert "2" in str(result.output)
     # orchestrator(1) + terminal calls delegate(2) + calc responds(3) + terminal responds(4)
     assert call_count == 4
+
+
+class TestSkillWorkflowIntegration:
+    """端到端测试：skill markdown → parse → compile → execute。"""
+
+    @pytest.mark.asyncio
+    async def test_checklist_skill_executes_as_pipeline(self):
+        """纯 checklist 的 skill 应该编译为线性管道并按顺序执行。"""
+        from src.skills.workflow_parser import SkillWorkflowParser
+        from src.skills.compiler import WorkflowCompiler
+        from src.agents.agent import Agent
+
+        content = (
+            "# Test\n\n"
+            "## Checklist\n\n"
+            "1. **Step A** — do A\n"
+            "2. **Step B** — do B\n"
+        )
+        parser = SkillWorkflowParser()
+        plan = parser.parse(content, "test")
+
+        assert len(plan.steps) == 2
+        assert plan.transitions[0].from_step == plan.steps[0].id
+        assert plan.transitions[0].to_step == plan.steps[1].id
+
+        def make_agent(step_id, instructions):
+            return Agent(name=step_id, description="t", instructions=instructions)
+
+        compiler = WorkflowCompiler()
+        graph = compiler.compile(plan, agent_factory=make_agent)
+
+        assert graph.entry == plan.steps[0].id
+        assert len(graph.nodes) == 2
+        assert len(graph.edges) == 1

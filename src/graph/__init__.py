@@ -10,6 +10,7 @@ from src.graph.builder import GraphBuilder
 from src.graph.engine import GraphEngine, GraphResult
 from src.graph.hooks import GraphHooks
 from src.graph.workflow import StepType, WorkflowStep, WorkflowTransition, WorkflowPlan
+from src.graph.nodes import DecisionNode, SubgraphNode, TerminalNode
 from src.graph.messages import (
     AgentMessage,
     AgentResponse,
@@ -38,4 +39,7 @@ __all__ = [
     "WorkflowStep",
     "WorkflowTransition",
     "WorkflowPlan",
+    "DecisionNode",
+    "SubgraphNode",
+    "TerminalNode",
 ]

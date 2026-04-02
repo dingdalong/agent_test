@@ -9,6 +9,7 @@ from typing import Any
 
 from src.agents.agent import Agent, AgentResult, HandoffRequest
 from src.agents.context import RunContext, TraceEvent, AppState
+from src.graph.messages import AgentMessage, AgentResponse
 from src.guardrails import run_guardrails
 from src.llm.structured import build_output_schema, parse_output
 
@@ -43,7 +44,7 @@ class AgentRunner:
         # 2. input guardrails
         block = await run_guardrails(agent.input_guardrails, context, context.input)
         if block:
-            return AgentResult(text=block.message)
+            return AgentResult(response=AgentResponse(text=block.message, sender=agent.name))
 
         # 3. 构建 instructions
         if callable(agent.instructions):
@@ -115,19 +116,26 @@ class AgentRunner:
                         args = json.loads(tc["arguments"])
                     except json.JSONDecodeError:
                         args = {}
-                    handoff = HandoffRequest(
-                        target=target_name,
+                    message = AgentMessage(
+                        objective=args.get("objective", args.get("task", context.input)),
                         task=args.get("task", context.input),
+                        context=args.get("context", ""),
+                        expected_result=args.get("expected_result"),
+                        sender=agent.name,
                     )
+                    handoff = HandoffRequest(target=target_name, message=message)
                     context.trace.append(TraceEvent(
                         node=agent.name,
                         event="handoff",
                         timestamp=time.time(),
-                        data={"target": target_name, "task": handoff.task},
+                        data={"target": target_name, "task": message.task},
                     ))
                     if hooks:
                         await hooks.on_handoff(agent, context, handoff)
-                    return AgentResult(text=content or "", handoff=handoff)
+                    return AgentResult(
+                        response=AgentResponse(text=content or "", sender=agent.name),
+                        handoff=handoff,
+                    )
 
             # 普通工具调用
             assistant_msg: dict[str, Any] = {
@@ -202,7 +210,9 @@ class AgentRunner:
             if parsed is not None:
                 structured_data = parsed.model_dump()
 
-        result = AgentResult(text=final_text, data=structured_data)
+        result = AgentResult(
+            response=AgentResponse(text=final_text, data=structured_data, sender=agent.name),
+        )
 
         # 9. hooks.on_end
         if hooks:
@@ -227,7 +237,9 @@ class AgentRunner:
         return [s for s in all_schemas if s["function"]["name"] in allowed]
 
     def _build_handoff_tools(self, agent: Agent, context: RunContext) -> list[dict]:
-        """为 agent.handoffs 生成 transfer_to_<name> 工具。"""
+        """为 agent.handoffs 生成 transfer_to_<name> 工具，使用统一消息 schema。"""
+        from src.graph.messages import build_message_schema
+
         tools = []
         registry = getattr(context.deps, "agent_registry", None)
         for target_name in agent.handoffs:
@@ -237,17 +249,8 @@ class AgentRunner:
                 "type": "function",
                 "function": {
                     "name": f"{HANDOFF_PREFIX}{target_name}",
-                    "description": f"将任务交接给 {target_name}: {description}",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "task": {
-                                "type": "string",
-                                "description": "交接给目标 agent 的任务描述",
-                            }
-                        },
-                        "required": ["task"],
-                    },
+                    "description": f"将任务永久交接给 {target_name}: {description}。交接后你不再处理此任务。",
+                    "parameters": build_message_schema(),
                 },
             })
         return tools

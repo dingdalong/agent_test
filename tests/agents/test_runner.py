@@ -134,7 +134,7 @@ async def test_runner_handoff_detection(handoff_agent, mock_router, mock_llm, re
 
     assert result.handoff is not None
     assert result.handoff.target == "calendar_agent"
-    assert result.handoff.task == "Book meeting tomorrow"
+    assert result.handoff.message.task == "Book meeting tomorrow"
 
 
 @pytest.mark.asyncio

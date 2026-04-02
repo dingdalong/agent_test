@@ -28,36 +28,6 @@ DELEGATE_DESCRIPTION_TEMPLATE = (
     "确保对方无需额外信息就能执行任务。"
 )
 
-RECEIVING_TEMPLATE = (
-    "你收到了一个委托任务：\n"
-    "最终目标：{objective}\n"
-    "具体任务：{task}\n"
-    "{context_line}"
-    "{expected_result_line}"
-    "\n"
-    "完成后请按以下格式返回：\n"
-    "第一行标注任务状态：已完成 / 信息不足 / 失败\n"
-    "之后是具体结果或需要补充的信息。\n"
-    "不要猜测或假设缺失的信息。"
-)
-
-
-def _build_receiving_input(
-    objective: str,
-    task: str,
-    context: str | None = None,
-    expected_result: str | None = None,
-) -> str:
-    """用接收方模板组装委托任务的 input 文本。"""
-    context_line = f"相关上下文：{context}\n" if context and context.strip() else ""
-    expected_result_line = f"期望结果：{expected_result}\n" if expected_result and expected_result.strip() else ""
-    return RECEIVING_TEMPLATE.format(
-        objective=objective,
-        task=task,
-        context_line=context_line,
-        expected_result_line=expected_result_line,
-    )
-
 
 class DelegateToolProvider:
     """将 Tool Agent 包装为可调用工具的 ToolProvider。
@@ -83,6 +53,8 @@ class DelegateToolProvider:
 
     def get_schemas(self) -> list[ToolDict]:
         """为每个可委派的 Tool Agent 生成结构化委托 schema。"""
+        from src.graph.messages import build_message_schema
+
         schemas: list[ToolDict] = []
         for summary in self._resolver.get_all_summaries():
             name = summary["name"]
@@ -92,43 +64,22 @@ class DelegateToolProvider:
                 "function": {
                     "name": f"{DELEGATE_PREFIX}{name}",
                     "description": DELEGATE_DESCRIPTION_TEMPLATE.format(description=desc),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "objective": {
-                                "type": "string",
-                                "description": "你的最终目标是什么（为什么需要这次委托）",
-                            },
-                            "task": {
-                                "type": "string",
-                                "description": "你需要对方具体做什么",
-                            },
-                            "context": {
-                                "type": "string",
-                                "description": "当前已知的相关信息。只填你确定知道的，不要猜测。",
-                            },
-                            "expected_result": {
-                                "type": "string",
-                                "description": "你期望对方完成后告诉你什么。如果不确定，可简要描述即可。",
-                            },
-                        },
-                        "required": ["objective", "task"],
-                    },
+                    "parameters": build_message_schema(),
                 },
             })
         return schemas
 
     async def execute(self, tool_name: str, arguments: dict[str, Any], context: Any = None) -> str:
-        """委派执行：从 context.deps 获取 registry/runner，创建子 RunContext。
+        """委派执行：构造 AgentMessage，通过 engine 或 runner 执行。
 
-        注意：子 RunContext 与父级共享同一 deps（含 tool_router）。
-        当前 AgentRunner 串行执行工具调用，因此不存在并发问题。
-        若未来支持并行工具调用，需要为每次 delegate 创建独立的 deps 副本。
+        优先通过 GraphEngine 执行（支持 handoff/tracing），
+        若 engine 不可用则回退到直接 runner 调用。
         """
         if context is None:
             return "错误：delegate 调用缺少执行上下文"
 
         from src.agents.context import DynamicState, RunContext
+        from src.graph.messages import AgentMessage, AgentResponse, format_for_receiver
 
         agent_name = tool_name[len(DELEGATE_PREFIX):]
 
@@ -146,27 +97,49 @@ class DelegateToolProvider:
             if mcp_tools:
                 await self._mcp_manager.ensure_servers_for_tools(mcp_tools)
 
-        # 从结构化参数构建接收方 input
+        # 构造结构化消息
         task = arguments.get("task", "")
-        objective = arguments.get("objective", task)
-        ctx_str = arguments.get("context")
-        expected_result = arguments.get("expected_result")
-        receiving_input = _build_receiving_input(
-            objective=objective,
+        message = AgentMessage(
+            objective=arguments.get("objective", task),
             task=task,
-            context=ctx_str,
-            expected_result=expected_result,
+            context=arguments.get("context", ""),
+            expected_result=arguments.get("expected_result"),
+            sender=getattr(context, "current_agent", None),
         )
 
+        # 通过引擎执行
+        engine = getattr(context.deps, "graph_engine", None)
         runner = getattr(context.deps, "runner", None)
-        if runner is None:
-            return "错误：deps 中缺少 runner"
+        if engine is None or runner is None:
+            # fallback：直接用 runner（兼容无 engine 的场景）
+            if runner is None:
+                return "错误：deps 中缺少 runner"
+            receiving_input = format_for_receiver(message)
+            sub_ctx = RunContext(
+                input=receiving_input,
+                state=DynamicState(),
+                deps=context.deps,
+                delegate_depth=context.delegate_depth + 1,
+            )
+            result = await runner.run(agent, sub_ctx)
+            return result.text
 
-        sub_ctx: RunContext = RunContext(
+        from src.agents.node import AgentNode
+        from src.graph.builder import GraphBuilder
+
+        receiving_input = format_for_receiver(message)
+        sub_graph = (
+            GraphBuilder()
+            .add_node(AgentNode(agent))
+            .set_entry(agent_name)
+            .compile()
+        )
+        sub_ctx = RunContext(
             input=receiving_input,
             state=DynamicState(),
             deps=context.deps,
             delegate_depth=context.delegate_depth + 1,
         )
-        result = await runner.run(agent, sub_ctx)
-        return result.text
+        graph_result = await engine.run(sub_graph, sub_ctx)
+        response = AgentResponse.from_graph_result(graph_result)
+        return response.text

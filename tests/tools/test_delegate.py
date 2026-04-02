@@ -219,16 +219,17 @@ async def test_execute_propagates_parent_delegate_depth():
     assert sub_ctx.delegate_depth == 2
 
 
-def test_build_receiving_input_all_fields():
+def test_format_for_receiver_all_fields():
     """所有字段都有值时，接收方 input 包含全部信息。"""
-    from src.tools.delegate import _build_receiving_input
+    from src.graph.messages import AgentMessage, format_for_receiver
 
-    result = _build_receiving_input(
+    msg = AgentMessage(
         objective="判断明天是否适合去故宫",
         task="查询北京明天天气",
         context="用户计划明天去故宫",
         expected_result="天气状况、温度、出行建议",
     )
+    result = format_for_receiver(msg)
     assert "最终目标：判断明天是否适合去故宫" in result
     assert "具体任务：查询北京明天天气" in result
     assert "相关上下文：用户计划明天去故宫" in result
@@ -237,49 +238,22 @@ def test_build_receiving_input_all_fields():
     assert "已完成 / 信息不足 / 失败" in result
 
 
-def test_build_receiving_input_optional_fields_missing():
+def test_format_for_receiver_optional_fields_missing():
     """可选字段为空时，不显示对应行。"""
-    from src.tools.delegate import _build_receiving_input
+    from src.graph.messages import AgentMessage, format_for_receiver
 
-    result = _build_receiving_input(
+    msg = AgentMessage(
         objective="帮用户查天气",
         task="查询天气预报",
-        context=None,
+        context="",
         expected_result=None,
     )
+    result = format_for_receiver(msg)
     assert "最终目标：帮用户查天气" in result
     assert "具体任务：查询天气预报" in result
     assert "相关上下文" not in result
     assert "期望结果" not in result
     assert "不要猜测或假设" in result
-
-
-def test_build_receiving_input_empty_string_treated_as_missing():
-    """空字符串应与 None 同样处理，不显示对应行。"""
-    from src.tools.delegate import _build_receiving_input
-
-    result = _build_receiving_input(
-        objective="目标",
-        task="任务",
-        context="",
-        expected_result="",
-    )
-    assert "相关上下文" not in result
-    assert "期望结果" not in result
-
-
-def test_build_receiving_input_whitespace_only_treated_as_missing():
-    """纯空白字符串应与 None 同样处理。"""
-    from src.tools.delegate import _build_receiving_input
-
-    result = _build_receiving_input(
-        objective="目标",
-        task="任务",
-        context="   ",
-        expected_result="  \t  ",
-    )
-    assert "相关上下文" not in result
-    assert "期望结果" not in result
 
 
 def test_get_schemas_has_structured_fields(provider):
@@ -356,3 +330,52 @@ async def test_execute_backward_compat_task_only(provider, mock_runner, mock_con
     call_args = mock_runner.run.call_args
     ctx = call_args[0][1]
     assert "具体任务：计算 1+1" in ctx.input
+
+
+@pytest.mark.asyncio
+async def test_execute_uses_engine_when_available():
+    """deps 中同时有 graph_engine 和 runner 时，应通过 engine 执行。"""
+    from src.tools.delegate import DelegateToolProvider
+    from src.agents.agent import AgentResult
+    from src.graph.engine import GraphResult
+    from pydantic import BaseModel, ConfigDict
+
+    class MockState(BaseModel):
+        model_config = ConfigDict(extra="allow")
+
+    cats = {
+        "tool_terminal": {"description": "终端操作", "tools": {"exec": "Execute"}},
+    }
+    test_resolver = CategoryResolver(cats)
+    test_registry = AgentRegistry()
+    test_registry.set_category_resolver(test_resolver)
+    test_runner = AsyncMock()
+    mock_engine = AsyncMock()
+    # engine.run 返回 GraphResult，其 output 是 AgentResponse
+    mock_engine.run = AsyncMock(return_value=GraphResult(
+        output=AgentResponse(text="engine执行完成", sender="tool_terminal"),
+        state=MockState(),
+        trace=[],
+    ))
+    test_deps = AgentDeps(
+        runner=test_runner,
+        agent_registry=test_registry,
+        graph_engine=mock_engine,
+    )
+
+    provider = DelegateToolProvider(resolver=test_resolver)
+
+    ctx = MagicMock()
+    ctx.deps = test_deps
+    ctx.delegate_depth = 0
+    ctx.current_agent = "orchestrator"
+
+    result = await provider.execute("delegate_tool_terminal", {
+        "objective": "测试",
+        "task": "执行命令",
+    }, context=ctx)
+
+    # 应通过 engine 而非直接 runner
+    mock_engine.run.assert_called_once()
+    test_runner.run.assert_not_called()
+    assert result == "engine执行完成"

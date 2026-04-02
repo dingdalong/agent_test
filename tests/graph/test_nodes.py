@@ -51,6 +51,54 @@ class TestDecisionNode:
         result = await node.execute(ctx)
         assert result.output.data["chosen_branch"] == "no"
 
+    @pytest.mark.asyncio
+    async def test_fuzzy_match_partial_label(self):
+        """LLM 只返回 label 的一部分（如 'revise' 应匹配 'no, revise'）。"""
+        mock_response = MagicMock()
+        mock_response.content = "revise"
+        mock_response.tool_calls = {}
+        mock_llm = AsyncMock()
+        mock_llm.chat.return_value = mock_response
+        node = DecisionNode(
+            name="d", question="?", branches=["no, revise", "yes"],
+        )
+        ctx = MockContext()
+        ctx.deps.llm = mock_llm
+        result = await node.execute(ctx)
+        assert result.output.data["chosen_branch"] == "no, revise"
+
+    @pytest.mark.asyncio
+    async def test_fuzzy_match_case_insensitive(self):
+        """大小写不同也能匹配。"""
+        mock_response = MagicMock()
+        mock_response.content = "YES"
+        mock_response.tool_calls = {}
+        mock_llm = AsyncMock()
+        mock_llm.chat.return_value = mock_response
+        node = DecisionNode(
+            name="d", question="?", branches=["yes", "no"],
+        )
+        ctx = MockContext()
+        ctx.deps.llm = mock_llm
+        result = await node.execute(ctx)
+        assert result.output.data["chosen_branch"] == "yes"
+
+    @pytest.mark.asyncio
+    async def test_fuzzy_match_quoted_response(self):
+        """LLM 回复带引号时仍能匹配。"""
+        mock_response = MagicMock()
+        mock_response.content = '"yes"'
+        mock_response.tool_calls = {}
+        mock_llm = AsyncMock()
+        mock_llm.chat.return_value = mock_response
+        node = DecisionNode(
+            name="d", question="?", branches=["yes", "no"],
+        )
+        ctx = MockContext()
+        ctx.deps.llm = mock_llm
+        result = await node.execute(ctx)
+        assert result.output.data["chosen_branch"] == "yes"
+
 
 class TestTerminalNode:
     @pytest.mark.asyncio

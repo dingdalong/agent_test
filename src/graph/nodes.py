@@ -16,22 +16,45 @@ class DecisionNode:
     branches: list[str]
 
     async def execute(self, context: Any) -> NodeResult:
-        options_text = ", ".join(self.branches)
+        # 用编号列表避免 label 中的逗号导致歧义
+        options_lines = "\n".join(
+            f"  {i + 1}. {branch}" for i, branch in enumerate(self.branches)
+        )
         prompt = (
             f"Based on the current state, choose the next action.\n\n"
             f"Current state: {context.input}\n"
-            f"Options: {options_text}\n\n"
-            f"Reply with ONLY the chosen option label."
+            f"Options:\n{options_lines}\n\n"
+            f"Reply with ONLY the exact option text (not the number)."
         )
         messages = [{"role": "user", "content": prompt}]
         response = await context.deps.llm.chat(messages, silent=True)
-        choice = response.content.strip()
+        choice = response.content.strip().strip('"').strip("'")
+        # 模糊匹配：LLM 可能只返回 label 的一部分
+        matched = self._match_branch(choice)
         return NodeResult(
             output=AgentResponse(
-                text=choice,
-                data={"chosen_branch": choice},
+                text=matched,
+                data={"chosen_branch": matched},
             ),
         )
+
+    def _match_branch(self, choice: str) -> str:
+        """将 LLM 回复匹配到最佳 branch label。"""
+        lower = choice.lower()
+        # 精确匹配
+        for branch in self.branches:
+            if branch.lower() == lower:
+                return branch
+        # choice 是 branch 的子串（如 "revise" 匹配 "no, revise"）
+        for branch in self.branches:
+            if lower in branch.lower():
+                return branch
+        # branch 是 choice 的子串
+        for branch in self.branches:
+            if branch.lower() in lower:
+                return branch
+        # 无匹配，返回原始 choice，让 _resolve_edges 处理 fallback
+        return choice
 
 
 @dataclass

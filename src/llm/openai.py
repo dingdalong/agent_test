@@ -2,10 +2,12 @@
 
 import asyncio
 import logging
-from typing import Callable, Awaitable, Optional
+import time
 
 from openai import AsyncOpenAI, APIConnectionError, RateLimitError, APIError
 
+from src.events.bus import EventBus
+from src.events.types import TokenDelta
 from src.llm.types import LLMResponse
 
 logger = logging.getLogger(__name__)
@@ -22,12 +24,12 @@ class OpenAIProvider:
         concurrency: int = 5,
         max_retries: int = 3,
         timeout: float = 120.0,
-        on_chunk: Optional[Callable[[str], Awaitable[None]]] = None,
+        event_bus: EventBus | None = None,
     ):
         self.model = model
         self.max_retries = max_retries
         self._semaphore = asyncio.Semaphore(concurrency)
-        self._on_chunk = on_chunk
+        self._bus = event_bus
         self._client = AsyncOpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -81,8 +83,12 @@ class OpenAIProvider:
             if delta.content:
                 if not (delta.tool_calls and delta.content.isspace()):
                     content_parts.append(delta.content)
-                    if not silent and self._on_chunk:
-                        await self._on_chunk(delta.content)
+                    if not silent and self._bus:
+                        await self._bus.emit(TokenDelta(
+                            timestamp=time.time(),
+                            source=self.model,
+                            delta=delta.content,
+                        ))
 
             if delta.tool_calls:
                 for tool_chunk in delta.tool_calls:

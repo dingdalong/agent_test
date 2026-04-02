@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch, call
 import pytest
 from openai import APIConnectionError, RateLimitError
 
+from src.events.bus import EventBus
+from src.events.types import TokenDelta
 from src.llm.openai import OpenAIProvider
 from src.llm.types import LLMResponse
 
@@ -84,16 +86,16 @@ class TestConstructor:
         # asyncio.Semaphore stores its value as _value
         assert provider._semaphore._value == 3
 
-    def test_on_chunk_default_none(self, provider):
-        assert provider._on_chunk is None
+    def test_event_bus_default_none(self, provider):
+        assert provider._bus is None
 
-    def test_on_chunk_stored(self):
-        cb = AsyncMock()
+    def test_event_bus_stored(self):
+        bus = MagicMock(spec=EventBus)
         with patch("src.llm.openai.AsyncOpenAI"):
             p = OpenAIProvider(
-                api_key="k", base_url="u", model="m", on_chunk=cb
+                api_key="k", base_url="u", model="m", event_bus=bus
             )
-        assert p._on_chunk is cb
+        assert p._bus is bus
 
 
 # ---------------------------------------------------------------------------
@@ -321,16 +323,17 @@ class TestRetry:
 
 
 # ---------------------------------------------------------------------------
-# 5. on_chunk callback
+# 5. EventBus emission
 # ---------------------------------------------------------------------------
 
-class TestOnChunkCallback:
+class TestEventBusEmission:
     @pytest.mark.asyncio
-    async def test_on_chunk_called_during_streaming(self):
-        cb = AsyncMock()
+    async def test_token_delta_emitted_during_streaming(self):
+        bus = MagicMock(spec=EventBus)
+        bus.emit = AsyncMock()
         with patch("src.llm.openai.AsyncOpenAI"):
             p = OpenAIProvider(
-                api_key="k", base_url="u", model="m", on_chunk=cb
+                api_key="k", base_url="u", model="m", event_bus=bus
             )
 
         chunks = [
@@ -343,16 +346,19 @@ class TestOnChunkCallback:
 
         await p.chat(messages=[])
 
-        assert cb.call_count == 2
-        cb.assert_any_call("Hello")
-        cb.assert_any_call(" there")
+        assert bus.emit.call_count == 2
+        emitted_events = [call.args[0] for call in bus.emit.call_args_list]
+        assert all(isinstance(e, TokenDelta) for e in emitted_events)
+        assert emitted_events[0].delta == "Hello"
+        assert emitted_events[1].delta == " there"
 
     @pytest.mark.asyncio
-    async def test_on_chunk_not_called_when_silent(self):
-        cb = AsyncMock()
+    async def test_token_delta_not_emitted_when_silent(self):
+        bus = MagicMock(spec=EventBus)
+        bus.emit = AsyncMock()
         with patch("src.llm.openai.AsyncOpenAI"):
             p = OpenAIProvider(
-                api_key="k", base_url="u", model="m", on_chunk=cb
+                api_key="k", base_url="u", model="m", event_bus=bus
             )
 
         chunks = [
@@ -364,11 +370,11 @@ class TestOnChunkCallback:
 
         await p.chat(messages=[], silent=True)
 
-        cb.assert_not_called()
+        bus.emit.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_no_callback_registered_no_error(self, provider):
-        """Provider without on_chunk should not raise even when content arrives."""
+    async def test_no_event_bus_no_error(self, provider):
+        """Provider without event_bus should not raise even when content arrives."""
         chunks = [
             _make_chunk(content="text"),
             _make_chunk(finish_reason="stop"),

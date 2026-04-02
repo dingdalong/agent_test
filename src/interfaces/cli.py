@@ -22,6 +22,9 @@ from src.events.types import (
 class CLIInterface:
     """基于标准输入/输出的 CLI 交互实现。"""
 
+    def __init__(self) -> None:
+        self._in_thinking = False  # 是否正在输出思考流
+
     async def prompt(self, message: str) -> str:
         return await asyncio.to_thread(input, message)
 
@@ -32,8 +35,18 @@ class CLIInterface:
         response = await self.prompt(f"{message} (y/n): ")
         return response.strip().lower() in ("y", "yes", "确认")
 
+    def _end_thinking_if_needed(self) -> None:
+        """如果正在输出思考流，先换行结束。"""
+        if self._in_thinking:
+            print(flush=True)
+            self._in_thinking = False
+
     async def on_event(self, event: Event) -> None:
         """按事件类型格式化输出到终端。"""
+        # 非 ThinkingDelta 事件到来时，结束思考流
+        if not isinstance(event, ThinkingDelta):
+            self._end_thinking_if_needed()
+
         match event:
             case GraphStarted():
                 print("\n[开始执行]", flush=True)
@@ -60,4 +73,8 @@ class CLIInterface:
             case TokenDelta(delta=d):
                 print(d, end="", flush=True)
             case ThinkingDelta(content=c):
-                print(f"    💭 {c}", flush=True)
+                if not self._in_thinking:
+                    # 思考块开头：打印前缀
+                    print("    💭 ", end="", flush=True)
+                    self._in_thinking = True
+                print(c, end="", flush=True)

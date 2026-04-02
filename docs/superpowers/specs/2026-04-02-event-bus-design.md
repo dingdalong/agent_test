@@ -37,9 +37,9 @@ src/events/
 
 ```python
 class EventLevel(IntEnum):
-    PROGRESS = 1   # 节点开始/结束、图开始/结束、错误
+    PROGRESS = 1   # 流式回答(token_delta)、思考过程(thinking_delta)、错误
     DETAIL = 2     # + 工具调用、工具结果、handoff、agent 开始/结束
-    TRACE = 3      # + thinking、token_delta、llm_request
+    TRACE = 3      # + 图开始/结束、节点开始/结束（调试信息）
 ```
 
 配置方式：
@@ -66,10 +66,8 @@ class Event:
 
 | 事件类 | type 字段 | 字段 | 说明 |
 |--------|----------|------|------|
-| `GraphStarted` | `"graph_started"` | — | 图执行开始 |
-| `GraphEnded` | `"graph_ended"` | `output: Any` | 图执行结束 |
-| `NodeStarted` | `"node_started"` | `node_type: str` | 节点开始执行 |
-| `NodeEnded` | `"node_ended"` | `output_summary: str` | 节点执行完成 |
+| `TokenDelta` | `"token_delta"` | `delta: str` | LLM 流式 token |
+| `ThinkingDelta` | `"thinking_delta"` | `content: str` | LLM thinking 块内容 |
 | `ErrorOccurred` | `"error"` | `error: str` | 执行出错 |
 
 ### DETAIL 级别事件
@@ -86,8 +84,10 @@ class Event:
 
 | 事件类 | type 字段 | 字段 | 说明 |
 |--------|----------|------|------|
-| `TokenDelta` | `"token_delta"` | `delta: str` | LLM 流式 token |
-| `ThinkingDelta` | `"thinking_delta"` | `content: str` | LLM thinking 块内容 |
+| `GraphStarted` | `"graph_started"` | — | 图执行开始 |
+| `GraphEnded` | `"graph_ended"` | `output: Any` | 图执行结束 |
+| `NodeStarted` | `"node_started"` | `node_type: str` | 节点开始执行 |
+| `NodeEnded` | `"node_ended"` | `output_summary: str` | 节点执行完成 |
 
 ## EventBus 实现
 

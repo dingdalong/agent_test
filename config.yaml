@@ -34,5 +34,5 @@ user:
 #   dirs:
 #     - skills/
 #     - .agents/skills/
-# events:
-#   level: progress   # progress | detail | trace
+events:
+    level: progress   # progress(流式回答+思考) | detail(+工具/Agent) | trace(+图/节点调试)

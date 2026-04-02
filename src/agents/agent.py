@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Type
+from typing import Callable, Optional, Type
 
 from pydantic import BaseModel
 
@@ -47,7 +47,6 @@ class Agent:
         output_model: 结构化输出的 Pydantic 模型。
         input_guardrails: 输入护栏列表。
         output_guardrails: 输出护栏列表。
-        hooks: 生命周期钩子。
     """
 
     name: str
@@ -58,4 +57,3 @@ class Agent:
     output_model: Optional[Type[BaseModel]] = None
     input_guardrails: list = field(default_factory=list)
     output_guardrails: list = field(default_factory=list)
-    hooks: Optional[Any] = None

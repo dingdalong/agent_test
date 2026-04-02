@@ -9,6 +9,15 @@ from typing import Any
 
 from src.agents.agent import Agent, AgentResult, HandoffRequest
 from src.agents.context import RunContext, TraceEvent, AppState
+from src.events.bus import EventBus
+from src.events.types import (
+    AgentStarted,
+    AgentEnded,
+    ToolCalled as ToolCalledEvent,
+    ToolResult as ToolResultEvent,
+    Handoff as HandoffEvent,
+    ErrorOccurred,
+)
 from src.graph.messages import AgentMessage, AgentResponse
 from src.guardrails import run_guardrails
 from src.llm.structured import build_output_schema, parse_output
@@ -29,17 +38,19 @@ class AgentRunner:
         self,
         max_tool_rounds: int = 10,
         max_result_length: int = 4000,
+        event_bus: EventBus | None = None,
     ):
         self.max_tool_rounds = max_tool_rounds
         self.max_result_length = max_result_length
+        self._bus = event_bus
 
     async def run(self, agent: Agent, context: RunContext) -> AgentResult:
         """执行 agent，返回 AgentResult。"""
-        hooks = agent.hooks
-
-        # 1. hooks.on_start
-        if hooks:
-            await hooks.on_start(agent, context)
+        # 1. EventBus: agent_started
+        if self._bus:
+            await self._bus.emit(AgentStarted(
+                timestamp=time.time(), source=agent.name, agent_name=agent.name,
+            ))
 
         # 2. input guardrails
         block = await run_guardrails(agent.input_guardrails, context, context.input)
@@ -130,8 +141,11 @@ class AgentRunner:
                         timestamp=time.time(),
                         data={"target": target_name, "task": message.task},
                     ))
-                    if hooks:
-                        await hooks.on_handoff(agent, context, handoff)
+                    if self._bus:
+                        await self._bus.emit(HandoffEvent(
+                            timestamp=time.time(), source=agent.name,
+                            from_agent=agent.name, to_agent=target_name, task=message.task,
+                        ))
                     return AgentResult(
                         response=AgentResponse(text=content or "", sender=agent.name),
                         handoff=handoff,
@@ -165,14 +179,23 @@ class AgentRunner:
                     timestamp=time.time(),
                     data={"tool": tool_name, "args": args},
                 ))
-                if hooks:
-                    await hooks.on_tool_call(agent, context, tool_name, args)
+                if self._bus:
+                    await self._bus.emit(ToolCalledEvent(
+                        timestamp=time.time(), source=agent.name,
+                        tool_name=tool_name, args=args,
+                    ))
 
                 tool_router = getattr(context.deps, "tool_router", None)
                 if tool_router:
                     result_text = await tool_router.route(tool_name, args, context)
                 else:
                     result_text = "Error: no tool_router in deps"
+
+                if self._bus:
+                    await self._bus.emit(ToolResultEvent(
+                        timestamp=time.time(), source=agent.name,
+                        tool_name=tool_name, result=str(result_text)[:500],
+                    ))
 
                 messages.append({
                     "role": "tool",
@@ -214,9 +237,11 @@ class AgentRunner:
             response=AgentResponse(text=final_text, data=structured_data, sender=agent.name),
         )
 
-        # 9. hooks.on_end
-        if hooks:
-            await hooks.on_end(agent, context, result)
+        # 9. EventBus: agent_ended
+        if self._bus:
+            await self._bus.emit(AgentEnded(
+                timestamp=time.time(), source=agent.name, agent_name=agent.name,
+            ))
 
         return result
 

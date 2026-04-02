@@ -303,3 +303,93 @@ def test_build_handoff_tools_uses_context_registry():
     assert len(tools) == 1
     assert tools[0]["function"]["name"] == "transfer_to_target"
     assert "目标 agent" in tools[0]["function"]["description"]
+
+
+@pytest.mark.asyncio
+async def test_runner_emits_tool_events(simple_agent, mock_router, mock_llm):
+    """runner 应通过 EventBus 发出 ToolCalled 和 ToolResult 事件。"""
+    import asyncio
+    from src.agents.runner import AgentRunner
+    from src.events.bus import EventBus
+    from src.events.levels import EventLevel
+
+    mock_llm.chat = AsyncMock(side_effect=[
+        LLMResponse(
+            content="",
+            tool_calls={0: {"id": "call_1", "name": "get_weather", "arguments": '{"city": "Beijing"}'}},
+        ),
+        LLMResponse(content="Sunny", tool_calls={}),
+    ])
+
+    bus = EventBus(level=EventLevel.DETAIL)
+    received = []
+
+    async def consumer():
+        async for event in bus.subscribe():
+            received.append(event)
+
+    task = asyncio.create_task(consumer())
+    await asyncio.sleep(0)
+
+    ctx = RunContext(
+        input="weather",
+        state=DynamicState(),
+        deps=AgentDeps(llm=mock_llm, tool_router=mock_router),
+    )
+
+    runner = AgentRunner(event_bus=bus)
+    await runner.run(simple_agent, ctx)
+
+    bus.close()
+    await task
+
+    type_names = [e.type for e in received]
+    assert "agent_started" in type_names
+    assert "tool_called" in type_names
+    assert "tool_result" in type_names
+    assert "agent_ended" in type_names
+
+
+@pytest.mark.asyncio
+async def test_runner_emits_handoff_event(handoff_agent, mock_router, mock_llm, registry):
+    """runner 应通过 EventBus 发出 Handoff 事件。"""
+    import asyncio
+    from src.agents.runner import AgentRunner
+    from src.events.bus import EventBus
+    from src.events.levels import EventLevel
+
+    mock_llm.chat = AsyncMock(return_value=LLMResponse(
+        content="",
+        tool_calls={0: {
+            "id": "call_1",
+            "name": "transfer_to_calendar_agent",
+            "arguments": json.dumps({"task": "Book meeting"}),
+        }},
+    ))
+
+    bus = EventBus(level=EventLevel.DETAIL)
+    received = []
+
+    async def consumer():
+        async for event in bus.subscribe():
+            received.append(event)
+
+    task = asyncio.create_task(consumer())
+    await asyncio.sleep(0)
+
+    ctx = RunContext(
+        input="book a meeting",
+        state=DynamicState(),
+        deps=AgentDeps(llm=mock_llm, tool_router=mock_router, agent_registry=registry),
+    )
+
+    runner = AgentRunner(event_bus=bus)
+    await runner.run(handoff_agent, ctx)
+
+    bus.close()
+    await task
+
+    type_names = [e.type for e in received]
+    assert "handoff" in type_names
+    handoff_events = [e for e in received if e.type == "handoff"]
+    assert handoff_events[0].to_agent == "calendar_agent"

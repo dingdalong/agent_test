@@ -23,7 +23,6 @@ def test_agent_basic_creation():
     assert agent.output_model is None
     assert agent.input_guardrails == []
     assert agent.output_guardrails == []
-    assert agent.hooks is None
 
 
 def test_agent_with_all_fields():

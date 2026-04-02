@@ -1,6 +1,7 @@
 """事件系统 — Agent 思考过程的实时展示通道。"""
 
 from src.events.levels import EventLevel
+from src.events.bus import EventBus
 from src.events.types import (
     Event,
     AgentEvent,
@@ -20,6 +21,7 @@ from src.events.types import (
 
 __all__ = [
     "EventLevel",
+    "EventBus",
     "Event",
     "AgentEvent",
     "GraphStarted",

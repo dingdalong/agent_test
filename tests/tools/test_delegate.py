@@ -60,9 +60,9 @@ def test_can_handle(provider):
 
 def test_get_schemas(provider):
     schemas = provider.get_schemas()
-    assert len(schemas) == 2
+    assert len(schemas) == 3  # 2 delegate + 1 parallel_delegate
     names = {s["function"]["name"] for s in schemas}
-    assert names == {"delegate_tool_terminal", "delegate_tool_calc"}
+    assert names == {"delegate_tool_terminal", "delegate_tool_calc", "parallel_delegate"}
     terminal_schema = next(s for s in schemas if s["function"]["name"] == "delegate_tool_terminal")
     assert terminal_schema["type"] == "function"
     params = terminal_schema["function"]["parameters"]
@@ -379,3 +379,54 @@ async def test_execute_uses_engine_when_available():
     mock_engine.run.assert_called_once()
     test_runner.run.assert_not_called()
     assert result == "engine执行完成"
+
+
+class TestParallelDelegate:
+    def test_can_handle_parallel(self, provider):
+        assert provider.can_handle("parallel_delegate") is True
+
+    def test_parallel_schema_in_schemas(self, provider):
+        schemas = provider.get_schemas()
+        names = [s["function"]["name"] for s in schemas]
+        assert "parallel_delegate" in names
+
+    def test_parallel_schema_structure(self, provider):
+        schemas = provider.get_schemas()
+        parallel = next(s for s in schemas if s["function"]["name"] == "parallel_delegate")
+        params = parallel["function"]["parameters"]
+        assert "tasks" in params["properties"]
+        items = params["properties"]["tasks"]["items"]
+        assert "agent" in items["properties"]
+        assert "objective" in items["properties"]
+        assert "task" in items["properties"]
+
+    @pytest.mark.asyncio
+    async def test_parallel_delegate_executes_multiple(self, provider, mock_runner, mock_context):
+        from src.agents.agent import AgentResult
+
+        mock_runner.run = AsyncMock(return_value=AgentResult(
+            response=AgentResponse(text="result", sender="test"),
+        ))
+
+        result = await provider.execute(
+            "parallel_delegate",
+            {
+                "tasks": [
+                    {"agent": "tool_calc", "objective": "compute", "task": "1+1"},
+                    {"agent": "tool_terminal", "objective": "check", "task": "ls"},
+                ]
+            },
+            context=mock_context,
+        )
+        assert "[tool_calc]" in result
+        assert "[tool_terminal]" in result
+        assert "result" in result
+
+    @pytest.mark.asyncio
+    async def test_parallel_delegate_empty_tasks(self, provider, mock_context):
+        result = await provider.execute(
+            "parallel_delegate",
+            {"tasks": []},
+            context=mock_context,
+        )
+        assert "错误" in result

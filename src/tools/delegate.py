@@ -46,6 +46,8 @@ class DelegateToolProvider:
 
     def can_handle(self, tool_name: str) -> bool:
         """判断 tool_name 是否为已知的 delegate 工具。"""
+        if tool_name == "parallel_delegate":
+            return True
         if not tool_name.startswith(DELEGATE_PREFIX):
             return False
         agent_name = tool_name[len(DELEGATE_PREFIX):]
@@ -67,6 +69,31 @@ class DelegateToolProvider:
                     "parameters": build_message_schema(),
                 },
             })
+        # parallel_delegate 工具
+        items_schema = build_message_schema()
+        items_schema["properties"]["agent"] = {
+            "type": "string",
+            "description": "要委托的 agent 名称",
+        }
+        items_schema["required"] = ["agent", "objective", "task"]
+        schemas.append({
+            "type": "function",
+            "function": {
+                "name": "parallel_delegate",
+                "description": "并行委托多个任务给不同 agent，同时执行并返回合并结果。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "tasks": {
+                            "type": "array",
+                            "description": "要并行执行的任务列表",
+                            "items": items_schema,
+                        },
+                    },
+                    "required": ["tasks"],
+                },
+            },
+        })
         return schemas
 
     async def execute(self, tool_name: str, arguments: dict[str, Any], context: Any = None) -> str:
@@ -77,6 +104,9 @@ class DelegateToolProvider:
         """
         if context is None:
             return "错误：delegate 调用缺少执行上下文"
+
+        if tool_name == "parallel_delegate":
+            return await self._execute_parallel(arguments, context)
 
         from src.agents.context import DynamicState, RunContext
         from src.graph.messages import AgentMessage, AgentResponse, format_for_receiver
@@ -143,3 +173,31 @@ class DelegateToolProvider:
         graph_result = await engine.run(sub_graph, sub_ctx)
         response = AgentResponse.from_graph_result(graph_result)
         return response.text
+
+    async def _execute_parallel(
+        self, arguments: dict[str, Any], context: Any,
+    ) -> str:
+        """并行执行多个 delegate 任务。"""
+        import asyncio
+        tasks_input = arguments.get("tasks", [])
+        if not tasks_input:
+            return "错误：tasks 列表为空"
+
+        async def run_one(task_args: dict) -> str:
+            agent_name = task_args.get("agent", "")
+            tool_name = f"{DELEGATE_PREFIX}{agent_name}"
+            return await self.execute(tool_name, task_args, context)
+
+        results = await asyncio.gather(
+            *[run_one(t) for t in tasks_input],
+            return_exceptions=True,
+        )
+
+        parts = []
+        for task_args, result in zip(tasks_input, results):
+            agent = task_args.get("agent", "unknown")
+            if isinstance(result, Exception):
+                parts.append(f"[{agent}] 错误: {result}")
+            else:
+                parts.append(f"[{agent}] {result}")
+        return "\n---\n".join(parts)

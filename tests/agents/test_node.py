@@ -7,6 +7,7 @@ from src.agents.context import RunContext, DynamicState
 from src.agents.deps import AgentDeps
 from src.agents.node import AgentNode
 from src.graph.types import NodeResult
+from src.graph.messages import AgentResponse
 
 
 @pytest.mark.asyncio
@@ -14,7 +15,8 @@ async def test_agent_node_uses_runner_from_context():
     """AgentNode 应从 context.deps.runner 获取 runner。"""
     agent = Agent(name="test", description="Test", instructions="test")
     mock_runner = AsyncMock()
-    mock_runner.run = AsyncMock(return_value=AgentResult(text="ok", data={}))
+    response = AgentResponse(text="ok", data={}, sender="test")
+    mock_runner.run = AsyncMock(return_value=AgentResult(response=response))
 
     ctx = RunContext(
         input="hello",
@@ -25,7 +27,7 @@ async def test_agent_node_uses_runner_from_context():
     result = await node.execute(ctx)
 
     mock_runner.run.assert_called_once_with(agent, ctx)
-    assert result.output == {"text": "ok", "data": {}}
+    assert result.output is response
 
 
 @pytest.mark.asyncio

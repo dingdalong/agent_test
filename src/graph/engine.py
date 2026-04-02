@@ -112,7 +112,9 @@ class GraphEngine:
                     if context.depth > self.max_handoff_depth:
                         logger.warning(f"Max handoff depth reached ({self.max_handoff_depth})")
                     elif target in graph.nodes:
-                        context.input = node_result.handoff.task
+                        # 使用结构化消息的 task 字段作为下一个节点的输入
+                        handoff_msg = getattr(node_result.handoff, "message", None)
+                        context.input = handoff_msg.task if handoff_msg else node_result.handoff.task
                         pending = [target]
                         continue
                     else:

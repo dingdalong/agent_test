@@ -1,12 +1,14 @@
 """GraphEngine 执行测试 — 顺序、并行、条件、handoff、hooks、tracing。"""
 import pytest
 from dataclasses import dataclass, field
+from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from src.graph.types import NodeResult, FunctionNode
 from src.graph.builder import GraphBuilder
 from src.graph.engine import GraphEngine, GraphResult
 from src.graph.hooks import GraphHooks
+from src.graph.messages import AgentMessage
 
 
 # --- Test helpers: agent-agnostic context ---
@@ -27,9 +29,13 @@ class SimpleContext:
 
 @dataclass
 class HandoffData:
-    """简单的 handoff 数据结构，用于测试。"""
+    """handoff 数据结构，用于测试。使用 AgentMessage。"""
     target: str
-    task: str
+    message: Any = None  # AgentMessage
+
+    @property
+    def task(self):
+        return self.message.task if self.message else ""
 
 
 @pytest.fixture
@@ -194,7 +200,7 @@ async def test_handoff_to_graph_node(engine):
     async def initiator(ctx):
         return NodeResult(
             output="initiating",
-            handoff=HandoffData(target="handler", task="handle this"),
+            handoff=HandoffData(target="handler", message=AgentMessage(objective="handle this", task="handle this")),
         )
 
     async def handler(ctx):
@@ -218,7 +224,7 @@ async def test_handoff_max_depth():
     async def looper(ctx):
         return NodeResult(
             output="loop",
-            handoff=HandoffData(target="looper", task="loop again"),
+            handoff=HandoffData(target="looper", message=AgentMessage(objective="loop", task="loop again")),
         )
 
     graph = GraphBuilder()
@@ -239,7 +245,7 @@ async def test_handoff_to_unknown_target(engine):
     async def initiator(ctx):
         return NodeResult(
             output="initiating",
-            handoff=HandoffData(target="nonexistent", task="handle"),
+            handoff=HandoffData(target="nonexistent", message=AgentMessage(objective="handle", task="handle")),
         )
 
     graph = GraphBuilder()

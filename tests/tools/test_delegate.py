@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 from src.tools.categories import CategoryResolver
 from src.agents.registry import AgentRegistry
 from src.agents.deps import AgentDeps
+from src.graph.messages import AgentResponse
 
 
 @pytest.fixture
@@ -73,7 +74,7 @@ def test_get_schemas(provider):
 @pytest.mark.asyncio
 async def test_execute_delegates_to_runner(provider, mock_runner, mock_context):
     from src.agents.agent import AgentResult
-    mock_runner.run = AsyncMock(return_value=AgentResult(text="已完成\n执行完成"))
+    mock_runner.run = AsyncMock(return_value=AgentResult(response=AgentResponse(text="已完成\n执行完成", sender="tool_terminal")))
     result = await provider.execute("delegate_tool_terminal", {"task": "列出当前目录"}, context=mock_context)
     assert "执行完成" in result
     mock_runner.run.assert_called_once()
@@ -112,7 +113,7 @@ async def test_execute_ensures_mcp_connection():
     test_registry = AgentRegistry()
     test_registry.set_category_resolver(test_resolver)
     test_runner = AsyncMock()
-    test_runner.run = AsyncMock(return_value=AgentResult(text="done"))
+    test_runner.run = AsyncMock(return_value=AgentResult(response=AgentResponse(text="done", sender="tool_files")))
     test_deps = AgentDeps(runner=test_runner, agent_registry=test_registry)
 
     mock_mcp = AsyncMock()
@@ -147,7 +148,7 @@ async def test_execute_no_mcp_manager_still_works():
     test_registry = AgentRegistry()
     test_registry.set_category_resolver(test_resolver)
     test_runner = AsyncMock()
-    test_runner.run = AsyncMock(return_value=AgentResult(text="42"))
+    test_runner.run = AsyncMock(return_value=AgentResult(response=AgentResponse(text="42", sender="tool_calc")))
     test_deps = AgentDeps(runner=test_runner, agent_registry=test_registry)
 
     provider = DelegateToolProvider(resolver=test_resolver)
@@ -173,7 +174,7 @@ async def test_execute_propagates_delegate_depth():
     test_registry = AgentRegistry()
     test_registry.set_category_resolver(test_resolver)
     test_runner = AsyncMock()
-    test_runner.run = AsyncMock(return_value=AgentResult(text="done"))
+    test_runner.run = AsyncMock(return_value=AgentResult(response=AgentResponse(text="done", sender="tool_terminal")))
     test_deps = AgentDeps(runner=test_runner, agent_registry=test_registry)
 
     provider = DelegateToolProvider(resolver=test_resolver)
@@ -202,7 +203,7 @@ async def test_execute_propagates_parent_delegate_depth():
     test_registry = AgentRegistry()
     test_registry.set_category_resolver(test_resolver)
     test_runner = AsyncMock()
-    test_runner.run = AsyncMock(return_value=AgentResult(text="done"))
+    test_runner.run = AsyncMock(return_value=AgentResult(response=AgentResponse(text="done", sender="tool_terminal")))
     test_deps = AgentDeps(runner=test_runner, agent_registry=test_registry)
 
     provider = DelegateToolProvider(resolver=test_resolver)
@@ -309,7 +310,7 @@ async def test_execute_builds_structured_input(provider, mock_runner, mock_conte
     """execute 应用接收方模板组装 input，包含 objective/task/context/expected_result。"""
     from src.agents.agent import AgentResult
 
-    mock_runner.run = AsyncMock(return_value=AgentResult(text="已完成\n结果"))
+    mock_runner.run = AsyncMock(return_value=AgentResult(response=AgentResponse(text="已完成\n结果", sender="tool_terminal")))
     await provider.execute("delegate_tool_terminal", {
         "objective": "帮用户管理文件",
         "task": "列出当前目录",
@@ -330,7 +331,7 @@ async def test_execute_optional_fields_omitted(provider, mock_runner, mock_conte
     """只传 objective 和 task 时，input 不包含 context 和 expected_result 行。"""
     from src.agents.agent import AgentResult
 
-    mock_runner.run = AsyncMock(return_value=AgentResult(text="已完成\n结果"))
+    mock_runner.run = AsyncMock(return_value=AgentResult(response=AgentResponse(text="已完成\n结果", sender="tool_terminal")))
     await provider.execute("delegate_tool_terminal", {
         "objective": "查天气",
         "task": "查询天气预报",
@@ -349,7 +350,7 @@ async def test_execute_backward_compat_task_only(provider, mock_runner, mock_con
     """兼容旧格式：只传 task 时，objective 用 task 兜底。"""
     from src.agents.agent import AgentResult
 
-    mock_runner.run = AsyncMock(return_value=AgentResult(text="已完成\n42"))
+    mock_runner.run = AsyncMock(return_value=AgentResult(response=AgentResponse(text="已完成\n42", sender="tool_terminal")))
     await provider.execute("delegate_tool_terminal", {"task": "计算 1+1"}, context=mock_context)
 
     call_args = mock_runner.run.call_args

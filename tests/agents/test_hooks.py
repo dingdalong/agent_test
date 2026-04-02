@@ -28,6 +28,7 @@ async def test_agent_hooks_on_end():
     from src.agents.hooks import AgentHooks
     from src.agents.agent import Agent, AgentResult
     from src.agents.context import RunContext, DynamicState
+    from src.graph.messages import AgentResponse
 
     calls = []
 
@@ -37,7 +38,7 @@ async def test_agent_hooks_on_end():
     hooks = AgentHooks(on_end=on_end)
     agent = Agent(name="test", description="test", instructions="test")
     ctx = RunContext(input="hi", state=DynamicState(), deps=AgentDeps())
-    result = AgentResult(text="done")
+    result = AgentResult(response=AgentResponse(text="done", sender="test"))
 
     await hooks.on_end(agent, ctx, result)
     assert calls == [("end", "done")]

@@ -18,8 +18,9 @@ class AgentNode:
         runner = getattr(context.deps, "runner", None)
         if runner is None:
             raise RuntimeError(f"AgentNode({self.name}): deps.runner is None")
+        context.current_agent = self.agent.name
         result = await runner.run(self.agent, context)
         return NodeResult(
-            output={"text": result.text, "data": result.data},
+            output=result.response,
             handoff=result.handoff,
         )

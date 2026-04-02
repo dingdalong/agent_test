@@ -6,9 +6,9 @@ from enum import IntEnum
 class EventLevel(IntEnum):
     """三级事件粒度。
 
-    PROGRESS: 节点开始/结束、图开始/结束、错误（默认）
+    PROGRESS: token_delta、thinking_delta、错误（默认）
     DETAIL:   + 工具调用、工具结果、handoff、agent 开始/结束
-    TRACE:    + thinking、token_delta
+    TRACE:    + 图开始/结束、节点开始/结束
     """
 
     PROGRESS = 1

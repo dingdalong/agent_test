@@ -21,10 +21,8 @@ from src.events.levels import EventLevel
 
 def test_progress_events_have_correct_level():
     now = time.time()
-    assert GraphStarted(timestamp=now, source="graph").level == EventLevel.PROGRESS
-    assert GraphEnded(timestamp=now, source="graph", output="done").level == EventLevel.PROGRESS
-    assert NodeStarted(timestamp=now, source="node1", node_type="agent").level == EventLevel.PROGRESS
-    assert NodeEnded(timestamp=now, source="node1", output_summary="ok").level == EventLevel.PROGRESS
+    assert TokenDelta(timestamp=now, source="llm", delta="北").level == EventLevel.PROGRESS
+    assert ThinkingDelta(timestamp=now, source="llm", content="用户想知道...").level == EventLevel.PROGRESS
     assert ErrorOccurred(timestamp=now, source="node1", error="boom").level == EventLevel.PROGRESS
 
 
@@ -39,8 +37,10 @@ def test_detail_events_have_correct_level():
 
 def test_trace_events_have_correct_level():
     now = time.time()
-    assert TokenDelta(timestamp=now, source="llm", delta="北").level == EventLevel.TRACE
-    assert ThinkingDelta(timestamp=now, source="llm", content="用户想知道...").level == EventLevel.TRACE
+    assert GraphStarted(timestamp=now, source="graph").level == EventLevel.TRACE
+    assert GraphEnded(timestamp=now, source="graph", output="done").level == EventLevel.TRACE
+    assert NodeStarted(timestamp=now, source="node1", node_type="agent").level == EventLevel.TRACE
+    assert NodeEnded(timestamp=now, source="node1", output_summary="ok").level == EventLevel.TRACE
 
 
 def test_event_type_field():

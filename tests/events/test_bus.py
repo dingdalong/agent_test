@@ -27,7 +27,7 @@ async def test_emit_and_subscribe():
     task = asyncio.create_task(consumer())
     await asyncio.sleep(0)  # let consumer start
 
-    event = NodeStarted(timestamp=time.time(), source="node1", node_type="agent")
+    event = ToolCalled(timestamp=time.time(), source="node1", tool_name="t", args={})
     await bus.emit(event)
     await asyncio.sleep(0)  # let consumer process
 
@@ -52,18 +52,18 @@ async def test_level_filter():
     await asyncio.sleep(0)
 
     # PROGRESS 事件应该通过
-    await bus.emit(NodeStarted(timestamp=time.time(), source="n", node_type="agent"))
+    await bus.emit(TokenDelta(timestamp=time.time(), source="l", delta="x"))
     # DETAIL 事件应该被过滤
     await bus.emit(ToolCalled(timestamp=time.time(), source="a", tool_name="t", args={}))
     # TRACE 事件应该被过滤
-    await bus.emit(TokenDelta(timestamp=time.time(), source="l", delta="x"))
+    await bus.emit(NodeStarted(timestamp=time.time(), source="n", node_type="agent"))
     await asyncio.sleep(0)
 
     bus.close()
     await task
 
     assert len(received) == 1
-    assert received[0].type == "node_started"
+    assert received[0].type == "token_delta"
 
 
 @pytest.mark.asyncio
@@ -109,7 +109,7 @@ async def test_multiple_subscribers():
     task_b = asyncio.create_task(consumer_b())
     await asyncio.sleep(0)
 
-    await bus.emit(NodeStarted(timestamp=time.time(), source="n", node_type="agent"))
+    await bus.emit(ErrorOccurred(timestamp=time.time(), source="n", error="test"))
     await asyncio.sleep(0)
 
     bus.close()

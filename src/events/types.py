@@ -21,30 +21,19 @@ class Event:
 # --- PROGRESS 级别 ---
 
 @dataclass
-class GraphStarted(Event):
+class TokenDelta(Event):
+    """流式 token — 默认可见。"""
+    delta: str = ""
     level: EventLevel = field(default=EventLevel.PROGRESS, init=False)
-    type: Literal["graph_started"] = field(default="graph_started", init=False)
+    type: Literal["token_delta"] = field(default="token_delta", init=False)
 
 
 @dataclass
-class GraphEnded(Event):
-    output: Any = None
+class ThinkingDelta(Event):
+    """思考过程 — 默认可见。"""
+    content: str = ""
     level: EventLevel = field(default=EventLevel.PROGRESS, init=False)
-    type: Literal["graph_ended"] = field(default="graph_ended", init=False)
-
-
-@dataclass
-class NodeStarted(Event):
-    node_type: str = ""
-    level: EventLevel = field(default=EventLevel.PROGRESS, init=False)
-    type: Literal["node_started"] = field(default="node_started", init=False)
-
-
-@dataclass
-class NodeEnded(Event):
-    output_summary: str = ""
-    level: EventLevel = field(default=EventLevel.PROGRESS, init=False)
-    type: Literal["node_ended"] = field(default="node_ended", init=False)
+    type: Literal["thinking_delta"] = field(default="thinking_delta", init=False)
 
 
 @dataclass
@@ -98,17 +87,30 @@ class Handoff(Event):
 # --- TRACE 级别 ---
 
 @dataclass
-class TokenDelta(Event):
-    delta: str = ""
+class GraphStarted(Event):
     level: EventLevel = field(default=EventLevel.TRACE, init=False)
-    type: Literal["token_delta"] = field(default="token_delta", init=False)
+    type: Literal["graph_started"] = field(default="graph_started", init=False)
 
 
 @dataclass
-class ThinkingDelta(Event):
-    content: str = ""
+class GraphEnded(Event):
+    output: Any = None
     level: EventLevel = field(default=EventLevel.TRACE, init=False)
-    type: Literal["thinking_delta"] = field(default="thinking_delta", init=False)
+    type: Literal["graph_ended"] = field(default="graph_ended", init=False)
+
+
+@dataclass
+class NodeStarted(Event):
+    node_type: str = ""
+    level: EventLevel = field(default=EventLevel.TRACE, init=False)
+    type: Literal["node_started"] = field(default="node_started", init=False)
+
+
+@dataclass
+class NodeEnded(Event):
+    output_summary: str = ""
+    level: EventLevel = field(default=EventLevel.TRACE, init=False)
+    type: Literal["node_ended"] = field(default="node_ended", init=False)
 
 
 # 联合类型

@@ -94,3 +94,54 @@ class TestReadSkillInfo:
         (skill_dir / "SKILL.md").write_text('---\nname: bad\ndescription: ""\n---\n')
         with pytest.raises(ValueError, match="description"):
             read_skill_info(skill_dir)
+
+    def test_name_pattern_warns_on_uppercase(self, tmp_path, caplog):
+        skill_dir = tmp_path / "Bad-Name"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\nname: Bad-Name\ndescription: test\n---\n")
+        import logging
+        with caplog.at_level(logging.WARNING):
+            info = read_skill_info(skill_dir)
+        assert info.name == "Bad-Name"
+        assert "agentskills pattern" in caplog.text
+
+    def test_name_pattern_warns_on_leading_hyphen(self, tmp_path, caplog):
+        skill_dir = tmp_path / "-bad"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\nname: -bad\ndescription: test\n---\n")
+        import logging
+        with caplog.at_level(logging.WARNING):
+            read_skill_info(skill_dir)
+        assert "agentskills pattern" in caplog.text
+
+    def test_name_pattern_valid_passes(self, tmp_path, caplog):
+        skill_dir = tmp_path / "my-skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\nname: my-skill\ndescription: test\n---\n")
+        import logging
+        with caplog.at_level(logging.WARNING):
+            info = read_skill_info(skill_dir)
+        assert info.name == "my-skill"
+        assert "agentskills pattern" not in caplog.text
+
+    def test_optional_fields_stored_in_skill_info(self, tmp_path):
+        skill_dir = tmp_path / "full-skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: full-skill\ndescription: Full.\n"
+            "license: Apache-2.0\ncompatibility: Python 3.13+\n"
+            "metadata:\n  author: test\n  version: '1.0'\n---\nbody"
+        )
+        info = read_skill_info(skill_dir)
+        assert info.license == "Apache-2.0"
+        assert info.compatibility == "Python 3.13+"
+        assert info.metadata == {"author": "test", "version": "1.0"}
+
+    def test_optional_fields_default_none(self, tmp_path):
+        skill_dir = tmp_path / "minimal"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\nname: minimal\ndescription: Min.\n---\n")
+        info = read_skill_info(skill_dir)
+        assert info.license is None
+        assert info.compatibility is None
+        assert info.metadata is None

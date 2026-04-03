@@ -1,6 +1,7 @@
 """SKILL.md 文件解析器。"""
 
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -9,6 +10,9 @@ import yaml
 from .models import SkillInfo
 
 logger = logging.getLogger(__name__)
+
+# agentskills.io 标准：lowercase letters, numbers, hyphens; 不以 hyphen 开头/结尾; 无连续 hyphens
+_NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
 def find_skill_md(skill_dir: Path) -> Optional[Path]:
@@ -87,17 +91,35 @@ def read_skill_info(skill_dir: Path) -> SkillInfo:
     name = str(metadata["name"]).strip()
     description = str(description).strip()
 
-    # 宽容警告
+    # 标准合规校验（宽容：warn 但不拒绝）
     if len(name) > 64:
         logger.warning(f"Skill name '{name}' exceeds 64 character limit")
-    if "--" in name:
-        logger.warning(f"Skill name '{name}' contains consecutive hyphens")
+    if not _NAME_RE.match(name):
+        logger.warning(
+            f"Skill name '{name}' does not match agentskills pattern "
+            f"(lowercase letters, numbers, hyphens; no leading/trailing/consecutive hyphens)"
+        )
     if name != skill_dir.name:
         logger.warning(f"Skill name '{name}' does not match directory '{skill_dir.name}'")
+
+    # 提取可选字段
+    skill_license = metadata.get("license")
+    if skill_license is not None:
+        skill_license = str(skill_license).strip()
+    compatibility = metadata.get("compatibility")
+    if compatibility is not None:
+        compatibility = str(compatibility).strip()
+    raw_metadata = metadata.get("metadata")
+    skill_metadata = None
+    if isinstance(raw_metadata, dict):
+        skill_metadata = {str(k): str(v) for k, v in raw_metadata.items()}
 
     return SkillInfo(
         name=name,
         description=description,
         location=skill_md.resolve(),
         allowed_tools=metadata.get("allowed-tools"),
+        license=skill_license,
+        compatibility=compatibility,
+        metadata=skill_metadata,
     )

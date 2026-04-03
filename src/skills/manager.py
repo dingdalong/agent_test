@@ -10,7 +10,7 @@ from .parser import find_skill_md, parse_frontmatter, read_skill_info
 
 logger = logging.getLogger(__name__)
 
-_RESERVED_COMMANDS = {"book"}
+_RESERVED_COMMANDS = {"book", "plan"}
 _SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv"}
 _MAX_SCAN_DIRS = 2000
 
@@ -113,7 +113,11 @@ class SkillManager:
                 continue
             if path.name in ("SKILL.md", "skill.md"):
                 continue
+            # 跳过隐藏文件和常见忽略目录下的文件
             rel = path.relative_to(skill_dir)
+            parts = rel.parts
+            if any(p.startswith(".") or p in _SKIP_DIRS for p in parts):
+                continue
             resources.append(str(rel))
         return resources
 

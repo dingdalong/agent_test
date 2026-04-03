@@ -254,3 +254,41 @@ async def test_slash_command_reserved_prefix(tmp_path):
     mgr = SkillManager(skill_dirs=[str(skills_dir)])
     await mgr.discover()
     assert mgr.is_slash_command("/book something") is None
+
+
+@pytest.mark.asyncio
+async def test_slash_command_plan_reserved(tmp_path):
+    """plan 是保留命令，不应被匹配为 skill。"""
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir()
+    _make_skill(skills_dir, "plan", "A plan skill.")
+    mgr = SkillManager(skill_dirs=[str(skills_dir)])
+    await mgr.discover()
+    assert mgr.is_slash_command("/plan something") is None
+
+
+# --- list_resources filters ---
+
+@pytest.mark.asyncio
+async def test_list_resources_skips_hidden_files(tmp_path):
+    """list_resources 应跳过隐藏文件和 __pycache__ 等目录。"""
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir()
+    skill_dir = _make_skill(skills_dir, "my-skill")
+    # 正常文件
+    refs = skill_dir / "references"
+    refs.mkdir()
+    (refs / "guide.md").write_text("# Guide")
+    # 隐藏文件
+    (skill_dir / ".hidden").write_text("secret")
+    # __pycache__ 目录下的文件
+    pycache = skill_dir / "__pycache__"
+    pycache.mkdir()
+    (pycache / "cache.pyc").write_text("cached")
+
+    mgr = SkillManager(skill_dirs=[str(skills_dir)])
+    await mgr.discover()
+    resources = mgr.list_resources("my-skill")
+    assert "references/guide.md" in resources
+    assert ".hidden" not in resources
+    assert "__pycache__/cache.pyc" not in [str(r) for r in resources]

@@ -43,3 +43,4 @@ class WorkflowPlan:
     transitions: list[WorkflowTransition]
     entry_step: str
     constraints: list[str] = field(default_factory=list)
+    full_body: str = ""  # 完整 SKILL.md 正文（去掉 frontmatter）

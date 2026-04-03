@@ -161,3 +161,29 @@ class TestSubworkflowDetection:
         invoke_step = by_name["Invoke writing-plans skill"]
         assert invoke_step.step_type == StepType.SUBWORKFLOW
         assert invoke_step.subworkflow_skill == "writing-plans"
+
+
+class TestFullBodyExtraction:
+    def test_dot_skill_has_full_body(self):
+        parser = SkillWorkflowParser()
+        plan = parser.parse(SAMPLE_SKILL_WITH_DOT, "test-skill")
+        assert plan.full_body != ""
+        assert "# Test Skill" in plan.full_body
+        assert "Step one" in plan.full_body
+
+    def test_checklist_only_skill_has_full_body(self):
+        parser = SkillWorkflowParser()
+        plan = parser.parse(SAMPLE_SKILL_CHECKLIST_ONLY, "simple")
+        assert "# Simple Skill" in plan.full_body
+
+    def test_fallback_skill_has_full_body(self):
+        parser = SkillWorkflowParser()
+        plan = parser.parse(SAMPLE_SKILL_NO_STRUCTURE, "plain")
+        assert "Just do whatever" in plan.full_body
+
+    def test_frontmatter_stripped_from_full_body(self):
+        content = "---\nname: test\n---\n# Body\nContent here"
+        parser = SkillWorkflowParser()
+        plan = parser.parse(content, "test")
+        assert "name: test" not in plan.full_body
+        assert "# Body" in plan.full_body

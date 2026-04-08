@@ -73,7 +73,7 @@ async def create_app(config: AppConfig | None = None) -> AgentApp:
     # 2. Tools
     max_output_length = raw.get("tools", {}).get("max_output_length", 2000)
     interaction = UserInteractionService(ui)
-    discover_tools("src.tools.builtin", config.resolve("src/tools/builtin"))
+    discover_tools("src.tools.builtin", config.resolve_root("src/tools/builtin"))
     registry = get_registry()
     executor = ToolExecutor(registry)
     middlewares = [
@@ -86,7 +86,7 @@ async def create_app(config: AppConfig | None = None) -> AgentApp:
     tool_router.add_provider(UserInputToolProvider(interaction))
 
     # 3. MCP — 只加载配置，不连接。连接在 DelegateToolProvider.execute 中按需触发
-    mcp_config_path = str(config.resolve(raw.get("mcp", {}).get("config_path", "mcp_servers.json")))
+    mcp_config_path = str(config.resolve_root(raw.get("mcp", {}).get("config_path", "mcp_servers.json")))
     mcp_configs = load_mcp_config(mcp_config_path)
     mcp_manager = MCPManager(configs=mcp_configs, max_output_length=max_output_length)
     if mcp_configs:
@@ -146,7 +146,7 @@ async def create_app(config: AppConfig | None = None) -> AgentApp:
         validate_mcp_tools,
     )
 
-    categories_path = str(config.resolve(raw.get("tools", {}).get(
+    categories_path = str(config.resolve_root(raw.get("tools", {}).get(
         "categories_path", "tool_categories.json"
     )))
     category_resolver = None

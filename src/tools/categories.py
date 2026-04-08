@@ -238,21 +238,21 @@ class CategoryResolver:
     def build_instructions(self, agent_name: str) -> str:
         """构建指定类别的 agent 系统指令。
 
-        若类别条目中包含自定义 instructions 则直接使用，
-        否则根据模板自动生成。
+        始终使用模板生成基础指令，若类别条目中包含自定义 instructions
+        则作为"注意事项"追加到基础指令之后。
 
         Raises:
             KeyError: agent_name 不在已知类别中。
         """
         cat = self._categories[agent_name]
-        custom = cat.get("instructions")
-        if custom:
-            return custom
-
-        return _TOOL_AGENT_INSTRUCTIONS_TEMPLATE.format(
+        base = _TOOL_AGENT_INSTRUCTIONS_TEMPLATE.format(
             description=cat["description"],
             tool_names="、".join(cat["tools"].keys()),
         )
+        custom = cat.get("instructions")
+        if custom:
+            return f"{base}\n\n## 注意事项\n{custom}"
+        return base
 
     def get_all_summaries(self) -> list[dict[str, str]]:
         """返回所有类别的 name + description，供 orchestrator 使用。"""

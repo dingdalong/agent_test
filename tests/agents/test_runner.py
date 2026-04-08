@@ -220,9 +220,9 @@ async def test_runner_passes_context_to_route(mock_llm):
     ])
 
     agent = Agent(
-        name="tool_terminal",
-        description="终端操作",
-        instructions="终端专家。",
+        name="custom_agent",
+        description="自定义 Agent",
+        instructions="自定义专家。",
         tools=["delegate_tool_calc"],
     )
     ctx = RunContext(

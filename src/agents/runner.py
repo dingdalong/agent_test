@@ -28,6 +28,11 @@ HANDOFF_PREFIX = "transfer_to_"
 SYSTEM_TOOLS = {"ask_user"}
 
 
+def _is_delegate_tool(name: str) -> bool:
+    """判断工具名是否为 delegate 工具。"""
+    return name.startswith("delegate_") or name == "parallel_delegate"
+
+
 class AgentRunner:
     """驱动单个 Agent 完成任务的循环。
 
@@ -312,23 +317,41 @@ class AgentRunner:
     def _build_tools(self, agent: Agent, context: RunContext) -> list[dict]:
         """从 deps.tool_router 过滤 agent 允许的工具。
 
-        - 系统工具（SYSTEM_TOOLS）始终包含，所有 agent 可用
-        - 当 context.delegate_depth >= 1 时，过滤掉所有 delegate_ 前缀的工具
+        规则：
+        - 系统工具（SYSTEM_TOOLS）始终包含
+        - 工具类 agent（CategoryResolver 可解析）：只包含自身声明的工具
+        - 非工具类 agent：自动注入所有 delegate 工具
+        - delegate_depth >= 1 时，过滤掉所有 delegate 工具（安全网）
         """
         tool_router = getattr(context.deps, "tool_router", None)
         if not tool_router:
             return []
         all_schemas = tool_router.get_all_schemas()
 
-        if not agent.tools:
-            return [s for s in all_schemas if s["function"]["name"] in SYSTEM_TOOLS]
+        resolver = getattr(context.deps, "category_resolver", None)
+        is_tool_agent = resolver is not None and resolver.can_resolve(agent.name)
 
-        allowed = set(agent.tools) | SYSTEM_TOOLS
+        # 1. 构建基础 allowed 集合
+        if not agent.tools:
+            allowed = set(SYSTEM_TOOLS)
+        else:
+            allowed = set(agent.tools) | SYSTEM_TOOLS
+
+        # 2. 按 agent 类型处理 delegate
+        if is_tool_agent:
+            # 工具类 agent — 确保不包含 delegate（防御性过滤）
+            allowed = {n for n in allowed if not _is_delegate_tool(n)}
+        else:
+            # 非工具类 agent — 追加所有 delegate
+            for s in all_schemas:
+                fname = s["function"]["name"]
+                if _is_delegate_tool(fname):
+                    allowed.add(fname)
+
+        # 3. 安全网：delegate 链中不允许再次 delegate
         if context.delegate_depth >= 1:
-            allowed = {
-                name for name in allowed
-                if not name.startswith("delegate_")
-            }
+            allowed = {n for n in allowed if not _is_delegate_tool(n)}
+
         return [s for s in all_schemas if s["function"]["name"] in allowed]
 
     def _build_handoff_tools(self, agent: Agent, context: RunContext) -> list[dict]:

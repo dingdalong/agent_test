@@ -458,3 +458,132 @@ def test_build_tools_system_tools_not_filtered_by_delegate_depth():
     assert "exec" in names
     assert "ask_user" in names
     assert "delegate_tool_calc" not in names
+
+
+def test_build_tools_tool_agent_no_delegates():
+    """工具类 agent（CategoryResolver 可解析）不应获得 delegate 工具。"""
+    from src.agents.runner import AgentRunner
+    from src.tools.categories import CategoryResolver
+
+    cats = {
+        "tool_terminal": {"description": "终端操作", "tools": {"exec": "Execute"}},
+        "tool_calc": {"description": "计算", "tools": {"calc": "Calculate"}},
+    }
+    resolver = CategoryResolver(cats)
+
+    mock_router = MagicMock()
+    mock_router.get_all_schemas = MagicMock(return_value=[
+        {"type": "function", "function": {"name": "exec", "description": "Execute", "parameters": {}}},
+        {"type": "function", "function": {"name": "delegate_tool_calc", "description": "委派计算", "parameters": {}}},
+        {"type": "function", "function": {"name": "parallel_delegate", "description": "并行", "parameters": {}}},
+        {"type": "function", "function": {"name": "ask_user", "description": "Ask user", "parameters": {}}},
+    ])
+
+    agent = Agent(name="tool_terminal", description="终端", instructions="终端专家.", tools=["exec"])
+    ctx = RunContext(
+        input="test", state=DynamicState(),
+        deps=AgentDeps(tool_router=mock_router, category_resolver=resolver),
+        delegate_depth=0,
+    )
+
+    runner = AgentRunner()
+    tools = runner._build_tools(agent, ctx)
+
+    names = [t["function"]["name"] for t in tools]
+    assert "exec" in names
+    assert "ask_user" in names
+    assert "delegate_tool_calc" not in names
+    assert "parallel_delegate" not in names
+
+
+def test_build_tools_non_tool_agent_auto_injects_delegates():
+    """非工具类 agent（tools=[]）自动获得所有 delegate 工具。"""
+    from src.agents.runner import AgentRunner
+    from src.tools.categories import CategoryResolver
+
+    cats = {
+        "tool_terminal": {"description": "终端操作", "tools": {"exec": "Execute"}},
+    }
+    resolver = CategoryResolver(cats)
+
+    mock_router = MagicMock()
+    mock_router.get_all_schemas = MagicMock(return_value=[
+        {"type": "function", "function": {"name": "exec", "description": "Execute", "parameters": {}}},
+        {"type": "function", "function": {"name": "delegate_tool_terminal", "description": "委派终端", "parameters": {}}},
+        {"type": "function", "function": {"name": "parallel_delegate", "description": "并行委托", "parameters": {}}},
+        {"type": "function", "function": {"name": "ask_user", "description": "Ask user", "parameters": {}}},
+    ])
+
+    agent = Agent(name="orchestrator", description="总控", instructions="路由.", tools=[])
+    ctx = RunContext(
+        input="test", state=DynamicState(),
+        deps=AgentDeps(tool_router=mock_router, category_resolver=resolver),
+        delegate_depth=0,
+    )
+
+    runner = AgentRunner()
+    tools = runner._build_tools(agent, ctx)
+
+    names = [t["function"]["name"] for t in tools]
+    assert "delegate_tool_terminal" in names
+    assert "parallel_delegate" in names
+    assert "ask_user" in names
+    assert "exec" not in names
+
+
+def test_build_tools_non_tool_agent_with_tools_gets_delegates():
+    """非工具类 agent 即使有声明工具，也自动获得 delegate。"""
+    from src.agents.runner import AgentRunner
+    from src.tools.categories import CategoryResolver
+
+    cats = {
+        "tool_terminal": {"description": "终端操作", "tools": {"exec": "Execute"}},
+    }
+    resolver = CategoryResolver(cats)
+
+    mock_router = MagicMock()
+    mock_router.get_all_schemas = MagicMock(return_value=[
+        {"type": "function", "function": {"name": "some_tool", "description": "Some", "parameters": {}}},
+        {"type": "function", "function": {"name": "delegate_tool_terminal", "description": "委派终端", "parameters": {}}},
+        {"type": "function", "function": {"name": "ask_user", "description": "Ask user", "parameters": {}}},
+    ])
+
+    agent = Agent(name="my_agent", description="自定义", instructions="自定义.", tools=["some_tool"])
+    ctx = RunContext(
+        input="test", state=DynamicState(),
+        deps=AgentDeps(tool_router=mock_router, category_resolver=resolver),
+        delegate_depth=0,
+    )
+
+    runner = AgentRunner()
+    tools = runner._build_tools(agent, ctx)
+
+    names = [t["function"]["name"] for t in tools]
+    assert "some_tool" in names
+    assert "delegate_tool_terminal" in names
+    assert "ask_user" in names
+
+
+def test_build_tools_filters_parallel_delegate_at_depth_1():
+    """delegate_depth>=1 时，parallel_delegate 也应被过滤。"""
+    from src.agents.runner import AgentRunner
+
+    mock_router = MagicMock()
+    mock_router.get_all_schemas = MagicMock(return_value=[
+        {"type": "function", "function": {"name": "exec", "description": "Execute", "parameters": {}}},
+        {"type": "function", "function": {"name": "delegate_tool_calc", "description": "Delegate", "parameters": {}}},
+        {"type": "function", "function": {"name": "parallel_delegate", "description": "Parallel", "parameters": {}}},
+        {"type": "function", "function": {"name": "ask_user", "description": "Ask user", "parameters": {}}},
+    ])
+
+    agent = Agent(name="test", description="Test", instructions="Test.", tools=["exec", "delegate_tool_calc", "parallel_delegate"])
+    ctx = RunContext(input="test", state=DynamicState(), deps=AgentDeps(tool_router=mock_router), delegate_depth=1)
+
+    runner = AgentRunner()
+    tools = runner._build_tools(agent, ctx)
+
+    names = [t["function"]["name"] for t in tools]
+    assert "exec" in names
+    assert "ask_user" in names
+    assert "delegate_tool_calc" not in names
+    assert "parallel_delegate" not in names

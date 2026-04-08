@@ -9,24 +9,39 @@ class TestAppConfig:
     """AppConfig 路径解析测试。"""
 
     def test_resolve_relative(self, tmp_path: Path):
-        config = AppConfig(workspace=tmp_path, data_dir=tmp_path / ".agent_data", raw={})
+        config = AppConfig(root=tmp_path, workspace=tmp_path, data_dir=tmp_path / ".agent_data", raw={})
         result = config.resolve("skills/")
         assert result == (tmp_path / "skills").resolve()
 
     def test_resolve_absolute(self, tmp_path: Path):
-        config = AppConfig(workspace=tmp_path, data_dir=tmp_path / ".agent_data", raw={})
+        config = AppConfig(root=tmp_path, workspace=tmp_path, data_dir=tmp_path / ".agent_data", raw={})
         abs_path = "/usr/local/share"
         result = config.resolve(abs_path)
         assert result == Path(abs_path)
 
+    def test_resolve_root_relative(self, tmp_path: Path):
+        root = tmp_path / "project"
+        root.mkdir()
+        workspace = root / "workspace"
+        workspace.mkdir()
+        config = AppConfig(root=root, workspace=workspace, data_dir=workspace / ".agent_data", raw={})
+        result = config.resolve_root("skills/")
+        assert result == (root / "skills").resolve()
+
+    def test_resolve_root_absolute(self, tmp_path: Path):
+        config = AppConfig(root=tmp_path, workspace=tmp_path, data_dir=tmp_path / ".agent_data", raw={})
+        abs_path = "/usr/local/share"
+        result = config.resolve_root(abs_path)
+        assert result == Path(abs_path)
+
     def test_resolve_data_relative(self, tmp_path: Path):
         data_dir = tmp_path / ".agent_data"
-        config = AppConfig(workspace=tmp_path, data_dir=data_dir, raw={})
+        config = AppConfig(root=tmp_path, workspace=tmp_path, data_dir=data_dir, raw={})
         result = config.resolve_data("chroma")
         assert result == (data_dir / "chroma").resolve()
 
     def test_resolve_data_absolute(self, tmp_path: Path):
-        config = AppConfig(workspace=tmp_path, data_dir=tmp_path / ".agent_data", raw={})
+        config = AppConfig(root=tmp_path, workspace=tmp_path, data_dir=tmp_path / ".agent_data", raw={})
         abs_path = "/var/data/chroma"
         result = config.resolve_data(abs_path)
         assert result == Path(abs_path)
@@ -34,6 +49,12 @@ class TestAppConfig:
 
 class TestLoadConfig:
     """load_config 集成测试。"""
+
+    def test_root_is_config_dir(self, tmp_path: Path):
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(yaml.dump({}))
+        config = load_config(str(config_file))
+        assert config.root == tmp_path.resolve()
 
     def test_default_workspace_is_config_dir(self, tmp_path: Path):
         config_file = tmp_path / "config.yaml"

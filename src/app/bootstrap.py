@@ -92,9 +92,13 @@ async def create_app(config: AppConfig | None = None) -> AgentApp:
     if mcp_configs:
         tool_router.add_provider(MCPToolProvider(mcp_manager))
 
-    # 4. Skills
+    # 4. Skills — 用户配置目录（相对于 workspace）+ 项目内置目录（相对于项目根）
     skill_dirs = raw.get("skills", {}).get("dirs", ["skills/", ".agents/skills/"])
-    skill_manager = SkillManager(skill_dirs=[str(config.resolve(d)) for d in skill_dirs])
+    resolved = [str(config.resolve(d)) for d in skill_dirs]
+    builtin_skills = str(config.resolve_root("skills/"))
+    if builtin_skills not in resolved:
+        resolved.append(builtin_skills)
+    skill_manager = SkillManager(skill_dirs=resolved)
     await skill_manager.discover()
     if skill_manager._skills:
         tool_router.add_provider(SkillToolProvider(skill_manager))

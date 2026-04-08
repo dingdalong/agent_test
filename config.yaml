@@ -1,6 +1,6 @@
 # ===== 目录配置 =====
-# workspace: .              # 用户项目目录（相对于本文件所在目录），默认 "."
-# data_dir: .agent_data     # 系统数据目录（相对于 workspace），默认 ".agent_data"
+workspace: workspace              # 用户项目目录（相对于本文件所在目录），默认 "."
+data_dir: .agent_data     # 系统数据目录（相对于 workspace），默认 ".agent_data"
 
 # ===== 用户配置 =====
 llm:
@@ -35,7 +35,7 @@ user:
 # mcp:
 #   config_path: mcp_servers.json
 # skills:
-#   dirs:
+#   dirs:                  # 相对于 workspace 解析；项目根 skills/ 始终自动包含
 #     - skills/
 #     - .agents/skills/
 events:

@@ -15,11 +15,13 @@ class AppConfig:
     """应用配置，持有解析后的绝对路径和原始配置字典。
 
     Attributes:
+        root: 项目根目录（config.yaml 所在目录，绝对路径）。
         workspace: 用户项目上下文目录（绝对路径）。
         data_dir: 系统数据目录（绝对路径）。
         raw: 原始 config dict，下游组件按需读取非路径配置。
     """
 
+    root: Path
     workspace: Path
     data_dir: Path
     raw: dict = field(default_factory=dict)
@@ -28,6 +30,11 @@ class AppConfig:
         """相对于 workspace 解析路径，绝对路径原样返回。"""
         p = Path(relative)
         return p if p.is_absolute() else (self.workspace / p).resolve()
+
+    def resolve_root(self, relative: str | Path) -> Path:
+        """相对于 root（项目根目录）解析路径，绝对路径原样返回。"""
+        p = Path(relative)
+        return p if p.is_absolute() else (self.root / p).resolve()
 
     def resolve_data(self, relative: str | Path) -> Path:
         """相对于 data_dir 解析路径，绝对路径原样返回。"""
@@ -71,4 +78,4 @@ def load_config(path: str = "config.yaml") -> AppConfig:
     workspace = (config_dir / raw.get("workspace", ".")).resolve()
     data_dir = (workspace / raw.get("data_dir", ".agent_data")).resolve()
 
-    return AppConfig(workspace=workspace, data_dir=data_dir, raw=raw)
+    return AppConfig(root=config_dir, workspace=workspace, data_dir=data_dir, raw=raw)

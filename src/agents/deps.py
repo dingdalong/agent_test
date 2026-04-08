@@ -8,6 +8,7 @@
 - ui: UserInterface (src.interfaces.base)
 - memory: MemoryProvider | None (src.memory.base)
 - runner: AgentRunner (src.agents.runner)
+- category_resolver: CategoryResolver | None (src.tools.categories)
 """
 
 from typing import Any
@@ -31,3 +32,4 @@ class AgentDeps(BaseModel):
     ui: Any = None               # UserInterface — 必需
     memory: Any = None           # MemoryProvider — 可选
     runner: Any = None           # AgentRunner — 必需
+    category_resolver: Any = None  # CategoryResolver — 可选

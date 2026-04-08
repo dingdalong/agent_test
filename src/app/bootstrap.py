@@ -215,6 +215,7 @@ async def create_app(config: AppConfig | None = None) -> AgentApp:
         ui=ui,
         memory=memory_store,
         runner=runner,
+        category_resolver=category_resolver,
     )
 
     # 7.5 Delegate Tool Provider

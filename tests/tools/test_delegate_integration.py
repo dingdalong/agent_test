@@ -36,7 +36,7 @@ def registry(resolver):
 
 @pytest.mark.asyncio
 async def test_delegate_end_to_end(resolver, registry):
-    """Agent_A 通过 delegate 调用 Agent_B，获取结果并继续完成任务。"""
+    """非工具类 agent 通过 delegate 调用工具类 agent，获取结果并继续。"""
     mock_llm = AsyncMock()
 
     call_count = 0
@@ -45,6 +45,7 @@ async def test_delegate_end_to_end(resolver, registry):
         nonlocal call_count
         call_count += 1
         if call_count == 1:
+            # orchestrator 调用 delegate_tool_calc
             return LLMResponse(
                 content="",
                 tool_calls={0: {
@@ -59,36 +60,41 @@ async def test_delegate_end_to_end(resolver, registry):
                 }},
             )
         if call_count == 2:
+            # tool_calc agent 执行并返回
             return LLMResponse(content="计算结果是 2", tool_calls={})
-        return LLMResponse(content="命令执行完毕，1+1=2", tool_calls={})
+        # orchestrator 汇总结果
+        return LLMResponse(content="1+1=2", tool_calls={})
 
     mock_llm.chat = mock_chat
 
     runner = AgentRunner()
     router = ToolRouter()
 
-    # DelegateToolProvider 只接收 resolver
-    delegate_provider = DelegateToolProvider(
-        resolver=resolver,
-    )
+    delegate_provider = DelegateToolProvider(resolver=resolver)
     router.add_provider(delegate_provider)
 
-    agent_a = registry.get("tool_terminal")
-    assert "delegate_tool_calc" in agent_a.tools
+    # orchestrator 是非工具类 agent，delegate 由 _build_tools 自动注入
+    orchestrator = Agent(
+        name="orchestrator",
+        description="总控 Agent",
+        instructions="你是总控 Agent，使用 delegate 工具完成任务。",
+        tools=[],
+    )
+    registry.register(orchestrator)
 
-    # runner 和 registry 通过 deps 传递
     ctx = RunContext(
-        input="执行计算任务",
+        input="计算 1+1",
         state=DynamicState(),
         deps=AgentDeps(
             llm=mock_llm,
             tool_router=router,
             agent_registry=registry,
             runner=runner,
+            category_resolver=resolver,
         ),
         delegate_depth=0,
     )
-    result = await runner.run(agent_a, ctx)
+    result = await runner.run(orchestrator, ctx)
 
     assert "2" in result.text
     assert call_count == 3
@@ -96,7 +102,7 @@ async def test_delegate_end_to_end(resolver, registry):
 
 @pytest.mark.asyncio
 async def test_delegated_agent_cannot_delegate_further(resolver, registry):
-    """被 delegate 调用的 Agent_B 不应看到任何 delegate 工具。"""
+    """被 delegate 调用的工具类 Agent 不应看到任何 delegate 工具。"""
     mock_llm = AsyncMock()
 
     tools_seen_by_b = []
@@ -116,10 +122,9 @@ async def test_delegated_agent_cannot_delegate_further(resolver, registry):
         tool_router=router,
         agent_registry=registry,
         runner=runner,
+        category_resolver=resolver,
     )
-    delegate_provider = DelegateToolProvider(
-        resolver=resolver,
-    )
+    delegate_provider = DelegateToolProvider(resolver=resolver)
     router.add_provider(delegate_provider)
 
     agent_b = registry.get("tool_calc")
@@ -132,8 +137,8 @@ async def test_delegated_agent_cannot_delegate_further(resolver, registry):
     )
     await runner.run(agent_b, ctx)
 
-    delegate_tools = [t for t in tools_seen_by_b if t.startswith("delegate_")]
-    assert delegate_tools == [], f"Agent_B should not see delegate tools, but saw: {delegate_tools}"
+    delegate_tools = [t for t in tools_seen_by_b if t.startswith("delegate_") or t == "parallel_delegate"]
+    assert delegate_tools == [], f"Tool agent should not see delegate tools, but saw: {delegate_tools}"
 
 
 @pytest.mark.asyncio

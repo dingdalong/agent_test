@@ -82,7 +82,7 @@ async def run_classify(force: bool = False, output: str = DEFAULT_OUTPUT) -> Non
     raw = config.raw
 
     # 1. Local tools
-    discover_tools("src.tools.builtin", config.resolve("src/tools/builtin"))
+    discover_tools("src.tools.builtin", config.resolve_root("src/tools/builtin"))
     local_schemas = get_registry().get_schemas()
 
     # 2. MCP tools
@@ -92,7 +92,7 @@ async def run_classify(force: bool = False, output: str = DEFAULT_OUTPUT) -> Non
         from src.mcp.config import load_mcp_config
         from src.mcp.manager import MCPManager
 
-        mcp_config_path = str(config.resolve(raw.get("mcp", {}).get("config_path", "mcp_servers.json")))
+        mcp_config_path = str(config.resolve_root(raw.get("mcp", {}).get("config_path", "mcp_servers.json")))
         mcp_manager = MCPManager(configs=load_mcp_config(mcp_config_path))
         await mcp_manager.connect_all()
         mcp_schemas = mcp_manager.get_tools_schemas()

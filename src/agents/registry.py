@@ -54,16 +54,9 @@ class AgentRegistry:
         if self._category_resolver and self._category_resolver.can_resolve(name):
             cat = self._category_resolver.get_category(name)
 
-            # 一次遍历获取其他分类的 delegate 工具名和摘要
-            delegate_names, delegate_summaries = (
-                self._category_resolver.get_delegate_info(exclude=name)
-            )
+            instructions = self._category_resolver.build_instructions(name)
 
-            instructions = self._category_resolver.build_instructions(
-                name, delegate_summaries=delegate_summaries,
-            )
-
-            tools = list(cat["tools"].keys()) + delegate_names  # type: ignore[index]
+            tools = list(cat["tools"].keys())  # 只包含自身工具
 
             agent = Agent(
                 name=name,

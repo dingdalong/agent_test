@@ -103,8 +103,8 @@ def test_no_resolver_get_returns_none(registry):
 # ---------------------------------------------------------------------------
 
 
-def test_lazy_resolve_includes_delegate_tools(registry):
-    """懒加载的 category agent 应包含其他分类的 delegate 工具名。"""
+def test_lazy_resolve_excludes_delegate_tools(registry):
+    """懒加载的 category agent 不应包含其他分类的 delegate 工具名。"""
     from src.tools.categories import CategoryResolver
 
     cats = {
@@ -118,13 +118,13 @@ def test_lazy_resolve_includes_delegate_tools(registry):
     agent = registry.get("tool_terminal")
     assert agent is not None
 
-    # 自身的 MCP 工具
+    # 只有自身工具
     assert "exec" in agent.tools
-    # 其他分类的 delegate 工具
-    assert "delegate_tool_calc" in agent.tools
-    assert "delegate_tool_files" in agent.tools
-    # 不包含自身的 delegate 工具
+    # 不包含任何 delegate 工具
+    assert "delegate_tool_calc" not in agent.tools
+    assert "delegate_tool_files" not in agent.tools
     assert "delegate_tool_terminal" not in agent.tools
+    assert agent.tools == ["exec"]
 
 
 def test_lazy_resolve_single_category_no_delegates(registry):
@@ -140,8 +140,8 @@ def test_lazy_resolve_single_category_no_delegates(registry):
     assert agent.tools == ["t1"]
 
 
-def test_lazy_resolve_instructions_contain_delegate_info(registry):
-    """懒加载的 agent 指令中应包含协作能力描述。"""
+def test_lazy_resolve_instructions_no_delegate_info(registry):
+    """懒加载的 agent 指令中不应包含协作能力描述。"""
     from src.tools.categories import CategoryResolver
 
     cats = {
@@ -152,5 +152,5 @@ def test_lazy_resolve_instructions_contain_delegate_info(registry):
     registry.set_category_resolver(resolver)
 
     agent = registry.get("tool_terminal")
-    assert "协作能力" in agent.instructions
-    assert "delegate_tool_calc" in agent.instructions
+    assert "协作能力" not in agent.instructions
+    assert "delegate_tool_calc" not in agent.instructions

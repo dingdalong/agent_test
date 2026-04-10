@@ -198,7 +198,7 @@ def test_category_resolver_build_instructions_default():
 
 
 def test_category_resolver_build_instructions_custom():
-    """有自定义 instructions 时，直接使用而非模板。"""
+    """有自定义 instructions 时，追加到模板生成的基础指令之后。"""
     from src.tools.categories import CategoryResolver
 
     cats = {
@@ -209,7 +209,13 @@ def test_category_resolver_build_instructions_custom():
         }
     }
     resolver = CategoryResolver(cats)
-    assert resolver.build_instructions("tool_terminal") == "自定义指令"
+    result = resolver.build_instructions("tool_terminal")
+    # 基础模板内容仍存在
+    assert "终端操作" in result
+    assert "exec" in result
+    # 自定义指令作为注意事项追加
+    assert "## 注意事项" in result
+    assert "自定义指令" in result
 
 
 def test_category_resolver_build_instructions_unknown_raises():

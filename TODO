@@ -1,3 +1,4 @@
+agentos，需要有用户界面，在里面有应用，应用使用skill编写，实现自然语言编程，底层用debian
 优化记忆提取，使用代码初步筛选是否值得提取，然后交给ai只提取与用户相关的内容。对于世界信息由知识库处理
 异步记忆系统完全重写（非包装器）
 添加异步缓存层
@@ -8,3 +9,52 @@
 支持编排agent工作流，如用配置文件来描述某一个工作应该用几个agent，每个agent的职责，顺序如何，可以调用什么工具，编排方案也支持扩充当前框架不存在的功能（需要约束）
 比如说当前的plan流程，是硬编码的，让它可以通过配置工作流来实现plan，这样可以让框架保持简洁，并且用户也能更加简单的利用该系统设计出自己想要的功能
 开发一个agentos sdk，支持各种llm、支付、监控等，避免反复配置，降低难度
+
+子agent需要支持转到另外一个agent中去
+子agent拥有独立的上下文，多agent的结果也需要能够被它人知道（有必要的话）
+agent之间结构化沟通，避免歧义，发任务者需要审核结果是否走偏，需要有自然的回答，又要有代码可以解析的结构化数据
+agent如何知道有哪些skill，以及自己要加载什么skill？，也分类？先确定场景，再在场景中引导agent加载skill？这样的话需要手动写很多场景（类似传统的代码，以后就不是开发场景，是开发skill了，自然语言编程！）
+消息总线 + 信封模式
+容错（断网重试、不污染记忆）
+智能上下文压缩，支持不同llm的上下文大小，避免小模型无法使用
+
+用户在沟通过程中，旁边加一个agent，协助用户输入
+监督agent
+需要显示思考过程，避免用户长时间等待，另外agent在执行任务的时候，也需要让用户知道agent在干什么，结果怎么样
+.env和config中有重复的配置，代码中对应的位置也要移除
+
+消除歧义
+
+
+  五、优化建议（按优先级）
+
+  P0 — 立即可做，低风险高收益
+
+  1. 删除重复文件：src/memory/embeddings.py、src/memory/utils.py、src/memory/store.py
+  2. 删除死代码：src/tools/tool_call.py、src/guardrails/output.py、src/utils/performance.py
+  3. AgentApp 构造函数瘦身：从 deps 取共享组件，减少参数到 5-6 个
+  4. async_time_function 如果留用，改 print 为 logger
+
+  P1 — 设计改进
+
+  5. 统一 Guardrails 返回类型为 GuardrailResult
+  6. AgentDeps 字段类型化（或至少在 bootstrap 做断言）
+  7. 启动时轻量校验 tool_categories.json（工具名是否还存在）
+  8. 统一截断配置为一个 config 层面的值，各截断点读取同一配置
+  9. _persist_turns 的 state 操作 抽为 RunContext.extend_history()
+
+  P2 — 架构演进
+
+  10. 结构化输出单次 LLM 调用（function calling 模式直出）
+  11. DelegateToolProvider 移到正确层级
+  12. 简化 skill 执行路径：统一或明确区分"执行"vs"查询"
+  13. 考虑是否需要 handoff 机制：当前默认图未使用，不如暂时移除降低认知负担
+
+
+  结构化输出优化：当前 runner.py 在获得 final_text 后会发送完整对话历史做第二次 LLM 调用。完全消除第二次调用（合
+并到工具循环中）需要大量重构且有副作用风险。另一个方案是保留第二次调用但大幅优化它——只发送 final_text
+而非完整历史，并用 forced tool_choice 代替 auto。这能显著节省 token 且风险低
+
+handoff和Delegate可能造成llm歧义
+
+用笔记本代替记忆，记录任务目标，当前步骤等

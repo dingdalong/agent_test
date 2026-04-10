@@ -3,96 +3,103 @@
   "max_tools_per_category": 8,
   "categories": {
     "browser_interaction_and_automation": {
-      "description": "浏览器页面交互和自动化操作，包括点击、悬停、拖放、填写表单、选择选项、按键、输入文本、上传文件、处理对话框",
+      "description": "提供在网页上进行交互操作的功能，包括点击、悬停、拖放、表单填写、选择选项、按键、输入文本、上传文件以及执行JavaScript代码。",
       "tools": {
-        "mcp_playwright_browser_click": "[playwright] 在网页上执行点击",
-        "mcp_playwright_browser_hover": "[playwright] 悬停在页面元素上",
-        "mcp_playwright_browser_drag": "[playwright] 在两个元素之间执行拖放",
-        "mcp_playwright_browser_fill_form": "[playwright] 填写多个表单字段",
-        "mcp_playwright_browser_select_option": "[playwright] 在下拉菜单中选择选项",
-        "mcp_playwright_browser_press_key": "[playwright] 按下键盘上的键",
-        "mcp_playwright_browser_type": "[playwright] 在可编辑元素中输入文本",
-        "mcp_playwright_browser_file_upload": "[playwright] 上传一个或多个文件"
+        "mcp_playwright_browser_click": "[playwright] 在网页上执行点击操作。",
+        "mcp_playwright_browser_hover": "[playwright] 悬停在页面元素上。",
+        "mcp_playwright_browser_drag": "[playwright] 在两个元素之间执行拖放操作。",
+        "mcp_playwright_browser_fill_form": "[playwright] 填写多个表单字段。",
+        "mcp_playwright_browser_select_option": "[playwright] 在下拉框中选择一个选项。",
+        "mcp_playwright_browser_press_key": "[playwright] 在键盘上按下一个键。",
+        "mcp_playwright_browser_type": "[playwright] 向可编辑元素输入文本。",
+        "mcp_playwright_browser_file_upload": "[playwright] 上传一个或多个文件。"
       }
     },
     "browser_navigation_and_inspection": {
-      "description": "浏览器导航、页面检查和网络监控，包括导航到 URL、返回上一页、获取控制台消息、网络请求和标签页管理",
+      "description": "提供浏览器页面的导航、历史管理、网络请求监控、控制台消息获取以及标签页管理的功能。",
       "tools": {
-        "mcp_playwright_browser_navigate": "[playwright] 导航到 URL",
-        "mcp_playwright_browser_navigate_back": "[playwright] 返回历史记录中的上一页",
-        "mcp_playwright_browser_console_messages": "[playwright] 返回所有控制台消息",
-        "mcp_playwright_browser_network_requests": "[playwright] 返回自加载页面以来的所有网络请求",
-        "mcp_playwright_browser_tabs": "[playwright] 列出、创建、关闭或选择浏览器标签页",
-        "mcp_playwright_browser_snapshot": "[playwright] 捕获当前页面的无障碍快照，这比截图更好",
-        "mcp_playwright_browser_take_screenshot": "[playwright] 截取当前页面的截图",
-        "mcp_playwright_browser_close": "[playwright] 关闭页面"
+        "mcp_playwright_browser_navigate": "[playwright] 导航到一个URL。",
+        "mcp_playwright_browser_navigate_back": "[playwright] 返回历史记录中的上一页。",
+        "mcp_playwright_browser_network_requests": "[playwright] 返回自页面加载以来的所有网络请求。",
+        "mcp_playwright_browser_console_messages": "[playwright] 返回所有控制台消息。",
+        "mcp_playwright_browser_tabs": "[playwright] 列出、创建、关闭或选择浏览器标签页。"
       }
     },
-    "browser_scripting_and_control": {
-      "description": "浏览器脚本执行、评估和高级控制，包括评估 JavaScript、运行 Playwright 代码、调整窗口大小、等待条件、处理对话框",
+    "browser_scripting_and_capture": {
+      "description": "提供在浏览器环境中执行脚本、评估表达式、处理对话框、捕获页面状态（截图、无障碍快照）以及等待特定条件的功能。",
       "tools": {
-        "mcp_playwright_browser_evaluate": "[playwright] 在页面或元素上评估 JavaScript 表达式",
-        "mcp_playwright_browser_run_code": "[playwright] 运行 Playwright 代码片段",
-        "mcp_playwright_browser_resize": "[playwright] 调整浏览器窗口大小",
-        "mcp_playwright_browser_wait_for": "[playwright] 等待文本出现或消失，或等待指定的时间过去",
-        "mcp_playwright_browser_handle_dialog": "[playwright] 处理对话框"
+        "mcp_playwright_browser_run_code": "[playwright] 运行Playwright代码片段。",
+        "mcp_playwright_browser_evaluate": "[playwright] 在页面或元素上评估JavaScript表达式。",
+        "mcp_playwright_browser_handle_dialog": "[playwright] 处理一个对话框。",
+        "mcp_playwright_browser_take_screenshot": "[playwright] 对当前页面进行截图。",
+        "mcp_playwright_browser_snapshot": "[playwright] 捕获当前页面的无障碍快照（优于截图）。",
+        "mcp_playwright_browser_wait_for": "[playwright] 等待文本出现/消失或指定时间过去。",
+        "mcp_playwright_browser_close": "[playwright] 关闭页面。",
+        "mcp_playwright_browser_resize": "[playwright] 调整浏览器窗口大小。"
       }
     },
     "desktop_commander_configuration": {
-      "description": "Desktop Commander 服务器配置管理，包括获取完整配置、设置特定配置值、获取使用统计和工具调用历史",
+      "description": "用于管理和查询 Desktop Commander 服务器的配置，包括安全设置（如阻止的命令、允许的目录）、默认 Shell、文件读写行数限制、遥测开关、客户端信息及系统信息等。",
       "tools": {
-        "mcp_desktop_commander_get_config": "[desktop-commander] 获取完整的服务器配置为 JSON",
-        "mcp_desktop_commander_set_config_value": "[desktop-commander] 通过键设置特定的配置值",
-        "mcp_desktop_commander_get_usage_stats": "[desktop-commander] 获取用于调试和分析的使用统计信息",
-        "mcp_desktop_commander_get_recent_tool_calls": "[desktop-commander] 获取带有参数和输出的最近工具调用历史记录",
-        "mcp_desktop_commander_give_feedback_to_desktop_commander": "[desktop-commander] 在浏览器中打开反馈表单以提供关于 Desktop Commander 的反馈",
-        "mcp_desktop_commander_get_prompts": "[desktop-commander] 按 ID 检索特定的 Desktop Commander 入门提示并执行它"
+        "mcp_desktop_commander_get_config": "[desktop-commander] 获取完整的服务器配置（JSON格式）。",
+        "mcp_desktop_commander_set_config_value": "[desktop-commander] 设置特定的配置项值。"
       }
     },
-    "file_content_management": {
-      "description": "文件内容读写操作，支持多种文件格式（文本、Excel、PDF、DOCX、图像），包括读取、写入、编辑和批量读取",
+    "file_editing_and_specialized_creation": {
+      "description": "提供对文件内容进行精确编辑（查找/替换、范围更新）以及创建/修改特定格式文件（PDF）的功能。",
       "tools": {
-        "mcp_desktop_commander_read_file": "[desktop-commander] 从文件和 URL 读取内容，支持多种格式和分页",
-        "mcp_desktop_commander_read_multiple_files": "[desktop-commander] 同时读取多个文件的内容",
-        "mcp_desktop_commander_write_file": "[desktop-commander] 写入或追加文件内容，支持分块写入",
-        "mcp_desktop_commander_write_pdf": "[desktop-commander] 创建新的 PDF 文件或修改现有的 PDF 文件",
-        "mcp_desktop_commander_edit_block": "[desktop-commander] 对文件进行精确编辑，支持文本、Excel 和 DOCX 文件"
+        "mcp_desktop_commander_edit_block": "[desktop-commander] 对文件（文本、Excel、DOCX）进行精确的块编辑。",
+        "mcp_desktop_commander_write_pdf": "[desktop-commander] 创建新的PDF文件或修改现有PDF。"
       }
     },
-    "file_search_operations": {
-      "description": "文件搜索功能，包括启动流式搜索、获取更多搜索结果、停止搜索和列出活动搜索",
+    "file_operations": {
+      "description": "提供对文件系统的基本操作，包括读取、写入、创建、移动/重命名、获取元信息以及列出目录内容。支持多种文件格式（文本、Excel、图像、PDF、DOCX）的读写和分块处理。",
+      "instructions": "探索目录时，可以查看当前目录及其子目录中的文件，但不要访问或浏览上层（父）目录。",
       "tools": {
-        "mcp_desktop_commander_start_search": "[desktop-commander] 启动可以逐步返回结果的流式搜索",
-        "mcp_desktop_commander_get_more_search_results": "[desktop-commander] 通过基于偏移量的分页从活动搜索中获取更多结果",
-        "mcp_desktop_commander_stop_search": "[desktop-commander] 停止活动搜索",
-        "mcp_desktop_commander_list_searches": "[desktop-commander] 列出所有活动搜索"
+        "mcp_desktop_commander_read_file": "[desktop-commander] 从文件或URL读取内容，支持多种格式和分页。",
+        "mcp_desktop_commander_read_multiple_files": "[desktop-commander] 同时读取多个文件的内容。",
+        "mcp_desktop_commander_write_file": "[desktop-commander] 写入或追加文件内容，支持分块。",
+        "mcp_desktop_commander_create_directory": "[desktop-commander] 创建新目录或确保目录存在。",
+        "mcp_desktop_commander_list_directory": "[desktop-commander] 获取指定路径下文件和目录的详细列表。",
+        "mcp_desktop_commander_move_file": "[desktop-commander] 移动或重命名文件和目录。",
+        "mcp_desktop_commander_get_file_info": "[desktop-commander] 检索文件或目录的详细元数据。"
       }
     },
-    "file_system_operations": {
-      "description": "文件和目录操作，包括创建目录、列出目录内容、移动/重命名文件、获取文件元数据",
+    "file_search": {
+      "description": "提供在文件系统中进行流式搜索的功能，支持按文件名或文件内容搜索，并可分页获取结果、管理搜索会话。",
+      "instructions": "搜索时，范围限定在当前目录及其子目录内，不要搜索上层（父）目录。",
       "tools": {
-        "mcp_desktop_commander_create_directory": "[desktop-commander] 创建新目录或确保目录存在",
-        "mcp_desktop_commander_list_directory": "[desktop-commander] 获取指定路径中所有文件和目录的详细列表",
-        "mcp_desktop_commander_move_file": "[desktop-commander] 移动或重命名文件和目录",
-        "mcp_desktop_commander_get_file_info": "[desktop-commander] 检索文件或目录的详细元数据"
+        "mcp_desktop_commander_start_search": "[desktop-commander] 启动一个流式搜索。",
+        "mcp_desktop_commander_get_more_search_results": "[desktop-commander] 从活动搜索中分页获取更多结果。",
+        "mcp_desktop_commander_stop_search": "[desktop-commander] 停止活动搜索。",
+        "mcp_desktop_commander_list_searches": "[desktop-commander] 列出所有活动搜索。"
       }
     },
     "mathematical_calculation": {
-      "description": "提供数学表达式计算功能",
+      "description": "提供基础的数学表达式安全计算功能。",
       "tools": {
         "calculator": "安全计算数学表达式"
       }
     },
     "process_management": {
-      "description": "终端进程管理，包括启动新进程、读取进程输出、与进程交互、强制终止进程、列出会话和进程、终止进程",
+      "description": "用于启动、交互、监控和终止终端进程，特别适用于本地文件分析、数据处理和运行交互式 REPL（如 Python、Node.js）。",
       "tools": {
-        "mcp_desktop_commander_start_process": "[desktop-commander] 启动具有智能状态检测的新终端进程",
-        "mcp_desktop_commander_read_process_output": "[desktop-commander] 从运行中的进程读取输出，支持类似文件的分页",
-        "mcp_desktop_commander_interact_with_process": "[desktop-commander] 向运行中的进程发送输入并自动接收响应",
-        "mcp_desktop_commander_force_terminate": "[desktop-commander] 强制终止运行中的终端会话",
-        "mcp_desktop_commander_list_sessions": "[desktop-commander] 列出所有活动终端会话",
-        "mcp_desktop_commander_list_processes": "[desktop-commander] 列出所有运行中的进程",
-        "mcp_desktop_commander_kill_process": "[desktop-commander] 通过 PID 终止运行中的进程"
+        "mcp_desktop_commander_start_process": "[desktop-commander] 启动一个新的终端进程。",
+        "mcp_desktop_commander_read_process_output": "[desktop-commander] 读取运行中进程的输出，支持分页。",
+        "mcp_desktop_commander_interact_with_process": "[desktop-commander] 向运行中的进程发送输入并获取响应。",
+        "mcp_desktop_commander_force_terminate": "[desktop-commander] 强制终止一个运行的终端会话。",
+        "mcp_desktop_commander_list_sessions": "[desktop-commander] 列出所有活动的终端会话。",
+        "mcp_desktop_commander_list_processes": "[desktop-commander] 列出所有正在运行的进程。",
+        "mcp_desktop_commander_kill_process": "[desktop-commander] 通过PID终止一个运行中的进程。"
+      }
+    },
+    "system_telemetry_and_feedback": {
+      "description": "提供系统使用统计、工具调用历史记录、反馈收集以及获取预设提示（用于引导用户）的功能。",
+      "tools": {
+        "mcp_desktop_commander_get_usage_stats": "[desktop-commander] 获取用于调试和分析的使用统计信息。",
+        "mcp_desktop_commander_get_recent_tool_calls": "[desktop-commander] 获取最近工具调用的历史记录。",
+        "mcp_desktop_commander_give_feedback_to_desktop_commander": "[desktop-commander] 在浏览器中打开反馈表单。",
+        "mcp_desktop_commander_get_prompts": "[desktop-commander] 按ID检索并执行特定的Desktop Commander引导提示。"
       }
     }
   }
